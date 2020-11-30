@@ -90,3 +90,7 @@ This program is licensed under the MIT License. See the `LICENSE` file for more 
 
 This program contains code from:
 * [Google Workspace Python Samples](https://github.com/googleworkspace/python-samples) (Apache 2.0)
+
+The implementation of `rate_limited_as_completed` was inspired by:
+* "[Making an Unlimited Number of Requests with Python aiohttp + pypeln](https://medium.com/@cgarciae/making-an-infinite-number-of-requests-with-python-aiohttp-pypeln-3a552b97dc95)" by Cristian Garcia (and the other blog posts linked at the start)
+* The [implementation of `asyncio.as_completed`](https://github.com/python/cpython/blob/9f004634a2bf50c782e223e2eb386ffa769b901c/Lib/asyncio/tasks.py#L549) in the Python standard library
