@@ -2,6 +2,10 @@ import asyncio
 import collections
 import time
 
+# Very short sleeps will probably just waste CPU. And, I'm not sure if
+# `time.monotonic()` has a guaranteed resolution (e.g. 1 millisecond).
+MIN_SLEEP = 0.020
+
 
 # Rate-limited version of `asyncio.as_completed`. Not thread-safe. Up to
 # `max_concurrent` tasks can run simultaneously. Up to `quota` tasks can be
@@ -9,10 +13,6 @@ import time
 def rate_limited_as_completed(coros, max_concurrent, quota, period=1):
     if max_concurrent > quota:
         raise ValueError("max_concurrent must be less than or equal to quota")
-
-    # Very short sleeps will probably just waste CPU. And, I'm not sure if
-    # `time.monotonic()` has a guaranteed resolution (e.g. 1 millisecond).
-    MIN_SLEEP = 0.020
 
     # Without a list, we have to track the length of `coros` so that we know
     # when to stop calling `_wait_to_get()`. This is messy. And, holding all
