@@ -1,0 +1,4 @@
+aiogoogle==0.1.17
+google-auth==1.23.0
+google-auth-oauthlib==0.4.2
+tqdm==4.54.0
