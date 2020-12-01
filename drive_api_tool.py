@@ -127,7 +127,7 @@ async def get_metadata(user_creds, ids, fields, max_concurrent, quota):
     metadata = []
     errors = []
     error_counts = defaultdict(int)
-    pbar = tqdm(total=len(ids))
+    pbar = tqdm(total=len(ids), unit="req")
     async with Aiogoogle(user_creds=user_creds) as aiogoogle:
         # TODO: Disable validation to work around a typo. Remove when
         # https://github.com/omarryhan/aiogoogle/pull/35 is merged.
