@@ -1,8 +1,7 @@
 __pycache__
 env
 
-credentials.json
-token.pickle
-
-# Any output JSON files
+# Credentials and scraped output
 *.json
+# Token files
+*.pickle
