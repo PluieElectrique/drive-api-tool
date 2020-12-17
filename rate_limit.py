@@ -31,9 +31,14 @@ def rate_limited_as_completed(coros, max_concurrent, quota, period=1):
             end_times.popleft()
 
     async def _submit():
-        for coro in coros:
+        for i, coro in enumerate(coros):
             await semaphore.acquire()
             _flush_times()
+
+            # Spread out the first batch of tasks
+            if i < max_concurrent:
+                await asyncio.sleep(period / quota)
+
             # Relying on the internal `_value` isn't great, but we need to know
             # how many active tasks there are. We aren't thread-safe, anyway.
             if (max_concurrent - semaphore._value - 1) + len(end_times) >= quota:
