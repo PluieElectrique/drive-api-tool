@@ -103,22 +103,22 @@ If there are any errors, a summary of the error codes will be printed at the end
 
 The default quota for the Drive API is 10,000 queries per 100 seconds. But, this should really be treated as 100 queries/s. Trying to go above this (e.g. 10,000 queries in 10 seconds, then waiting for 90 seconds) results in lots of `403 Rate Limit Exceeded` errors.
 
-If you are being rate limited, ensure that `quota` is not too high. You can see your specific quota in the Google Developer Console: Select your project, "APIs & Services" in the hamburger menu, "Google Drive API" at the bottom of the page, then "Quotas" on the left.  Or, if you get a `403` error with the long message, you can follow the link in it.
+If you are being rate limited, ensure that `quota` is not too high. You can see your specific quota in the Google Developer Console: Select your project from the drop-down in the header, "APIs & Services" in the hamburger menu, "Google Drive API" at the bottom of the page, then "Quotas" on the left.  Or, if you get a `403` error with the long message, you can follow the link in it.
 
 If you still need to go faster, you can apply to increase your quota. I haven't tried this, though.
 
 ## Options
 
-* `input`: Input file with one Drive API per line. Whitespace is trimmed, and blank and duplicate lines are ignored.
+* `input`: Input file with one Drive ID per line. Whitespace is trimmed, and blank and duplicate lines are ignored.
 * `output`: Output file containing the fetched metadata and errors as JSON. See [Output format](#output-format) for details.
 * `--fields` (default: `*`): Fields to return for each file. The format must follow an [XPath-like syntax](https://developers.google.com/drive/api/v3/fields-parameter#formatting_rules_for_the_fields_parameter). By default, all fields are returned, but for performance, you should only request the fields that you need. The Drive API docs have a [list of all possible fields](https://developers.google.com/drive/api/v3/reference/files).
-* `--quota` (default: `100`): Maximum number of queries that can be made per second. For example, a quota of 10,000 requests per 100 seconds is `--quota 100`. See [Rate limiting](#rate-limiting) for more details.
+* `--quota` (default: `100`): Maximum number of queries that can be made per second. For example, a quota of 10,000 requests per 100 seconds is `--quota 100`. See [Rate limiting](#rate-limiting) for details.
 * `--concurrent` (default: `100`): Maximum number of queries that can run at once. This must be less than or equal to `quota`, and it will be set to `quota` if it is higher. For reasonable quotas (e.g. not 100,000 queries per second), it's fine to set `concurrent` equal to `quota`. You should only need to set a lower value if you want to limit bandwidth or memory usage.
 * `--indent` (default: `2`): Number of spaces to indent the output JSON by. Set this to 0 to disable indentation.
-* `--host` (default: `localhost`): Host for the local auth server. You may need to change this if you are performing authorization on a remote server.
+* `--host` (default: `localhost`): Host for the local auth server. You may need to change this if you are performing [authorization on a remote server](#authorize-remotely-on-a-public-server).
 * `--port` (default: `8000`): Port for the local auth server. You may need to change this depending on firewall settings.
 * `--credentials` (default: `credentials.json`): Path to JSON file containing client credentials. Follow the steps in [Setup](#setup) if you don't have this file.
-* `--token` (default: `token.pickle`): File to store the access and refresh tokens. This saves having to authorize every time you want to run the tool.
+* `--token` (default: `token.pickle`): File to store the access and refresh tokens. This prevents having to authorize every time you want to run the tool.
 
 ## Legal
 
