@@ -4,7 +4,7 @@ Fetch file metadata from the Google Drive API.
 
 ## Setup
 
-You will need a Google Account and a recent version of Python 3. (Tested on 3.8.6.)
+You will need a Google Account and a recent version of Python 3. (Tested on 3.9.0.)
 
 If you don't already have a Cloud Platform project with the Drive API enabled, sign in to your Google Account and click the "Enable the Drive API" button in the [Drive API Python quickstart](https://developers.google.com/drive/api/v3/quickstart/python#step_1_turn_on_the). Name the project whatever you want. In the next step, you'll have to "Configure your OAuth client". What you select depends on where you are running this tool.
 
