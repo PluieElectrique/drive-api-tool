@@ -32,9 +32,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--indent",
-        default=0,
+        default=None,
         type=int,
-        help="(default: %(default)s) Spaces to indent JSON by. Set to 0 to disable",
+        help="(default: %(default)s) Spaces to indent JSON by",
     )
     parser.add_argument(
         "--host",
