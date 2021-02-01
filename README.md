@@ -107,11 +107,44 @@ If you are being rate limited, ensure that `quota` is not too high. You can see 
 
 If you still need to go faster, you can apply to increase your quota. I haven't tried this, though.
 
+## TSV Export
+
+To export data as TSV, pass a fields file using `--tsv FIELDS_FILE` with one field to export per line. For example:
+
+```
+id
+lastModifyingUser.displayName
+spaces[]
+owners[].displayName
+```
+
+Use `fieldName` to export the `str()` value of that field. For example, objects will export as `{'attr': 1}`, arrays will export as `[1, 2, 'a']`, and so on. The only difference is that booleans are upper-cased.
+
+Use `objName.attribute` to export a specific attribute from an object. Use `arrayName[]` to export the elements of an array, comma-separated (e.g. `1,2,a` instead of `[1, 2, 'a']`). Use `arrayName[].attribute` to export a specific attribute from an array of objects. The attributes will be comma-separated. For example, `bread[].type` will turn this:
+
+```json
+{
+    "bread": [
+        {"type": "wheat", "slices": 10},
+        {"type": "rye", "slices": 12},
+        {"type": "sourdough", "slices": 5}
+    ]
+}
+```
+into this:
+```
+bread[].type
+wheat,rye,sourdough
+```
+
+The output TSV file uses the same filename as `output` but with a `.tsv` extension.
+
 ## Options
 
 * `input`: Input file with one Drive ID per line. Whitespace is trimmed, and blank and duplicate lines are ignored.
 * `output`: Output file containing the fetched metadata and errors as JSON. See [Output format](#output-format) for details.
 * `--fields` (default: `*`): Fields to return for each file. The format must follow an [XPath-like syntax](https://developers.google.com/drive/api/v3/fields-parameter#formatting_rules_for_the_fields_parameter). By default, all fields are returned, but for performance, you should only request the fields that you need. The Drive API docs have a [list of all possible fields](https://developers.google.com/drive/api/v3/reference/files).
+* `--tsv`: File with fields to export as TSV. See [TSV Export](#tsv-export).
 * `--quota` (default: `100`): Maximum number of queries that can be made per second. For example, a quota of 10,000 requests per 100 seconds is `--quota 100`. See [Rate limiting](#rate-limiting) for details.
 * `--concurrent` (default: `100`): Maximum number of queries that can run at once. This must be less than or equal to `quota`, and it will be set to `quota` if it is higher. For reasonable quotas (e.g. not 100,000 queries per second), it's fine to set `concurrent` equal to `quota`. You should only need to set a lower value if you want to limit bandwidth or memory usage.
 * `--indent` (default: `2`): Number of spaces to indent the output JSON by. Set this to 0 to disable indentation.
