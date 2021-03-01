@@ -118,7 +118,7 @@ spaces[]
 owners[].displayName
 ```
 
-Use `fieldName` to export the `str()` value of that field. For example, objects will export as `{'attr': 1}`, arrays will export as `[1, 2, 'a']`, and so on. The only difference is that booleans are upper-cased.
+Use `fieldName` to export the `str()` value of that field. For example, objects will export as `{'attr': 1}`, arrays will export as `[1, 2, 'a']`, and so on. The only difference is that booleans are all caps.
 
 Use `objName.attribute` to export a specific attribute from an object. Use `arrayName[]` to export the elements of an array, comma-separated (e.g. `1,2,a` instead of `[1, 2, 'a']`). Use `arrayName[].attribute` to export a specific attribute from an array of objects. The attributes will be comma-separated. For example, `bread[].type` will turn this:
 
