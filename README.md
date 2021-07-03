@@ -23,6 +23,8 @@ After setting up your credentials, you can run the tool with:
 python drive_api_tool.py id-list.txt out.json
 ```
 
+`id-list.txt` is a file with one Docs/Drive ID per line and `out.json` is where the metadata will be stored (see [Output format](#output-format)).
+
 ## Authorization
 
 If you need to authorize the app, a link will be printed in the console (and opened in a web browser, if available). Go to the page and sign in to your Google Account (it doesn't have to be the same one you used to create the project). Ignore the warning that the app isn't verified and click on "Advanced" and "Go to [project name] (unsafe)" to proceed.
