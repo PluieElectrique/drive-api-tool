@@ -4,65 +4,31 @@ Fetch file metadata from the Google Drive API.
 
 ## Setup
 
-You will need a Google Account and a recent version of Python 3. (Tested on 3.9.0.)
+You will need a Google Account and a recent version of Python 3. (Tested on 3.9.)
 
-If you don't already have a Cloud Platform project with the Drive API enabled, sign in to your Google Account and click the "Enable the Drive API" button in the [Drive API Python quickstart](https://developers.google.com/drive/api/v3/quickstart/python#step_1_turn_on_the). Name the project whatever you want. In the next step, you'll have to "Configure your OAuth client". What you select depends on where you are running this tool.
+Install dependencies from `requirements.txt` (e.g. `pip install -r requirements.txt`).
 
-### Running locally
+If you don't already have a Cloud Platform project with the Drive API enabled, follow [this guide](https://developers.google.com/workspace/guides/create-project) (in the second section, be sure to enable the Drive API).
 
-If you will only be using this tool on your local machine, you can select "Desktop app". Skip the next section and continue with downloading the client configuration.
+Now, follow [this guide](https://developers.google.com/workspace/guides/create-credentials#create_a_oauth_client_id_credential) to create OAuth credentials. The type of credentials you create depends on where you are running this tool:
 
-### Running remotely
+* **Locally**: Follow the steps for a "Desktop application". Download the client secret JSON and save it as `credentials.json` in the same directory as the script (if you save it somewhere else, pass it in as an argument, e.g. `--credentials path/to/creds.json`). The first time you run the script, you will be prompted to go through the [authorization process](#authorization) with your Google Account. After that, you won't need to re-authorize until the token expires.
+* **Remotely**: You have two options:
+    * **Authorize locally**: This is the easy way: authorize locally and copy the credentials/token to your remote server. To do this, follow the above steps. After completing the setup, run the tool on your local machine with an empty file (e.g. `touch empty; python drive_api_tool.py empty unused_ouput`) and complete the [authorization process](#authorization). Then, copy the created `token.pickle` and your `credentials.json` to the server. You can then remotely run the script as normal.
+    * **Authorize remotely**: This is more annoying, but still doable. Follow the steps for a "web server app". (For the redirect URL, if you don't have a domain name that points to your server, you might be able to mess with your hosts file or use a localhost tunnel service like [localtunnel](https://localtunnel.me/) or [ngrok](https://ngrok.com/).) Copy the client secret JSON to your server as `credentials.json`. The first time you run the script, you will be prompted with the [authorization process](#authorization) (and will likely need to pass the host and port of your redirect URL, e.g. `--host example.com --port 8080`). After that, you will not need to re-authorize until the token expires (so you can leave off the `--host` and `--port` arguments until then).
 
-If you will be using this tool remotely (e.g. on a VPS), you have a few options:
-
-#### Authorize locally
-
-This is probably the easiest way: authorize locally and copy the credentials/token to the remote server. To do this, select "Desktop app". After completing the rest of the setup, run the tool once on your local machine with an empty file (e.g. `touch empty; python drive_api_tool.py empty unused`) and complete the authorization process. Then, copy `credentials.json` and `token.pickle` to your server.
-
-#### Authorize remotely on a public server
-
-This is more annoying, but still doable. Choose "Web server". You now need to provide a redirect URI. This must be a publicly accessible URI that points to your server. Additionally, Google requires that it not be a public IP address. So, you need a domain name pointing at your server or a workaround:
-
-* Modify your hosts file to point a fake domain name to your server
-* Use [xip.io](http://xip.io/), which resolves any domain name like `127.0.0.1.xip.io` to the corresponding IP
-* Use a localhost tunnel service like [localtunnel](https://localtunnel.me/) or [ngrok](https://ngrok.com/)
-
-Once you having a working domain, choose the port that you will run the web server on. (The default is `8000`, but you can use `--port` to pass a different port.) Now, enter this exact URI:
-```
-http://DOMAIN:PORT/
-```
-Where `DOMAIN` and `PORT` are replaced with your domain and port. It is important that this URI is exact and includes the trailing slash. If the URL does not match, the authorization will fail, and you will have to go into the Cloud Console to fix it.
-
----
-
-Click the button to "Download client configuration" and save it as `credentials.json`. Ensure that it's in the same directory as this tool, or that you pass it as an argument later (e.g. `--credentials path/to/creds.json`).
-
-Now, install dependencies from `requirements.txt`. For example:
-
-```
-pip install -r requirements.txt
-```
-
-You can now run the tool with:
+After setting up your credentials, you can run the tool with:
 
 ```
 python drive_api_tool.py id-list.txt out.json
 ```
 
-If there is no saved token (e.g. this is your first time running the tool) or if your token has expired and can't be refreshed, then you will need to authorize the app. Depending on which option you picked above, you may need to pass a different host and port. For example:
-
-```
-python drive_api_tool.py --host example.com --port 8080 id-list.txt out.json
-```
-
-After you authorize the tool, you won't need to provide the `--host` or `--port` options again (unless you need to re-authorize). See the next section for details on the authorization process.
-
 ## Authorization
 
 If you need to authorize the app, a link will be printed in the console (and opened in a web browser, if available). Go to the page and sign in to your Google Account (it doesn't have to be the same one you used to create the project). Ignore the warning that the app isn't verified and click on "Advanced" and "Go to [project name] (unsafe)" to proceed.
 
-(If you're concerned about security, all this tool does is fetch the metadata of the given IDs. It does not read the metadata of your personal files unless you pass those IDs. The only scope requested is `https://www.googleapis.com/auth/drive.readonly`, so this tool cannot create, modify, or delete files.)
+(If you're concerned about security, this tool only fetches the metadata of the given IDs. It does not read the metadata of your personal files unless you pass those IDs. The only scope requested is `https://www.googleapis.com/auth/drive.readonly` [see [this table](https://developers.google.com/drive/api/v3/about-auth#OAuth2Scope
+)], so this tool cannot create, modify, or delete files.)
 
 Then, click "Allow" to grant the permissions and "Allow" again to confirm. The tool should now begin to run, and you can now close the window. From now on, you should not need to re-authorize unless `token.pickle` is removed.
 
