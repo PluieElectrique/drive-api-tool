@@ -54,10 +54,7 @@ if __name__ == "__main__":
         "--credentials",
         metavar="CREDS",
         default="credentials.json",
-        help=(
-            "(default: %(default)s) "
-            "See https://developers.google.com/drive/api/v3/quickstart/python#step_1_turn_on_the"
-        ),
+        help="(default: %(default)s)",
     )
     parser.add_argument(
         "--token",
