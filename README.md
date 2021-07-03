@@ -115,7 +115,7 @@ The output TSV file uses the same filename as `output` but with a `.tsv` extensi
 * `--tsv`: File with fields to export as TSV. See [TSV Export](#tsv-export).
 * `--quota` (default: `100`): Maximum number of queries that can be made per second. For example, a quota of 10,000 requests per 100 seconds is `--quota 100`. See [Rate limiting](#rate-limiting) for details.
 * `--concurrent` (default: `100`): Maximum number of queries that can run at once. This must be less than or equal to `quota`, and it will be set to `quota` if it is higher. For reasonable quotas (e.g. not 100,000 queries per second), it's fine to set `concurrent` equal to `quota`. You should only need to set a lower value if you want to limit bandwidth or memory usage.
-* `--indent` (default: `2`): Number of spaces to indent the output JSON by. Set this to 0 to disable indentation.
+* `--indent` (default: no indenting): Number of spaces to indent the output JSON by.
 * `--host` (default: `localhost`): Host for the local auth server. You may need to change this if you are performing [authorization on a remote server](#authorize-remotely-on-a-public-server).
 * `--port` (default: `8000`): Port for the local auth server. You may need to change this depending on firewall settings.
 * `--credentials` (default: `credentials.json`): Path to JSON file containing client credentials. Follow the steps in [Setup](#setup) if you don't have this file.

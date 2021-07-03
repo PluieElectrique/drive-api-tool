@@ -7,9 +7,6 @@ if __name__ == "__main__":
     parser.add_argument("input", help="File with one Drive ID per line")
     parser.add_argument("output", help="JSON file to store fetched metadata and errors")
     parser.add_argument(
-        "--tsv", metavar="FIELDS_FILE", help="File with fields to export as TSV"
-    )
-    parser.add_argument(
         "--fields",
         default="*",
         help=(
@@ -19,6 +16,9 @@ if __name__ == "__main__":
             "https://developers.google.com/drive/api/v3/fields-parameter "
             "https://developers.google.com/drive/api/v3/reference/files"
         ),
+    )
+    parser.add_argument(
+        "--tsv", metavar="FIELDS_FILE", help="File with fields to export as TSV"
     )
     parser.add_argument(
         "--quota",
