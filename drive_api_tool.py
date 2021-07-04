@@ -8,13 +8,11 @@ if __name__ == "__main__":
     parser.add_argument("output", help="JSON file to store fetched metadata and errors")
     parser.add_argument(
         "--fields",
-        default="*",
+        default=None,
+        type=str,
         help=(
-            "(default: %(default)s) "
+            "(default: the default fields returned by the API) "
             "For performance, only request fields you need. "
-            "For formatting and a list of all fields, see: "
-            "https://developers.google.com/drive/api/v3/fields-parameter "
-            "https://developers.google.com/drive/api/v3/reference/files"
         ),
     )
     parser.add_argument(
