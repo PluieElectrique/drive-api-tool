@@ -84,6 +84,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from tqdm import tqdm
 
 from rate_limit import rate_limited_as_completed
+from tsv import export_tsv
 
 # We could also use `drive.metadata.readonly`, but the user might want to
 # scrape `downloadUrl` or `contentHints.thumbnail`.
@@ -157,21 +158,6 @@ async def get_metadata(user_creds, ids, fields, max_concurrent, quota):
     return metadata, errors, error_counts
 
 
-def tsv_get_field(data, field):
-    for i, part in enumerate(field):
-        if part == "[]":
-            return ",".join(tsv_get_field(d, field[i + 1 :]) for d in data)
-        elif part in data:
-            data = data[part]
-        else:
-            return ""
-
-    if isinstance(data, bool):
-        return str(data).upper()
-    else:
-        return str(data)
-
-
 if __name__ == "__main__":
     with open(args.input) as f:
         ids = list(set(filter(None, map(lambda i: i.strip(), f.readlines()))))
@@ -187,14 +173,4 @@ if __name__ == "__main__":
         json.dump({"metadata": metadata, "errors": errors}, f, indent=args.indent)
 
     if args.tsv:
-        with open(args.tsv) as f:
-            fields = list(filter(None, map(lambda l: l.strip(), f.readlines())))
-        with open(os.path.splitext(args.output)[0] + ".tsv", "w") as f:
-            f.write("\t".join(fields) + "\n")
-            fields = list(
-                map(lambda l: l.replace(".", " ").replace("[]", " []").split(), fields)
-            )
-            for data in metadata:
-                f.write(
-                    "\t".join(tsv_get_field(data, field) for field in fields) + "\n"
-                )
+        export_tsv(args)
