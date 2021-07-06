@@ -70,7 +70,6 @@ if __name__ == "__main__":
 
 
 import asyncio
-from collections import defaultdict
 import json
 import os
 import pickle
@@ -83,6 +82,7 @@ from tqdm import tqdm
 
 from rate_limit import rate_limited_as_completed
 from tsv import export_tsv
+from util import ErrorTracker
 
 # We could also use `drive.metadata.readonly`, but the user might want to
 # scrape `downloadUrl` or `contentHints.thumbnail`.
@@ -124,8 +124,7 @@ def get_user_creds(credentials_file, token_file, host, port):
 
 async def get_metadata(user_creds, ids, fields, max_concurrent, quota):
     metadata = []
-    errors = []
-    error_counts = defaultdict(int)
+    err_track = ErrorTracker()
     pbar = tqdm(total=len(ids), unit="req")
     async with Aiogoogle(user_creds=user_creds) as aiogoogle:
         drive = await aiogoogle.discover("drive", "v3")
@@ -133,42 +132,30 @@ async def get_metadata(user_creds, ids, fields, max_concurrent, quota):
             aiogoogle.as_user(drive.files.get(fileId=id, fields=fields)) for id in ids
         ]
         for coro in rate_limited_as_completed(coros, max_concurrent, quota):
-            try:
-                res = await coro
+            res = await err_track(coro)
+            if res:
                 metadata.append(res)
-            except Exception as exc:
-                error = {
-                    # Neither the request nor the response provides the file
-                    # ID, so we have to extract it ourselves.
-                    "id": exc.req.url.split("/")[-1].split("?")[0],
-                }
-                if exc.res.json is not None and "error" in exc.res.json:
-                    json_error = exc.res.json["error"]
-                    error["code"] = json_error["code"]
-                    error["message"] = json_error["message"]
-                    error_counts[error["code"]] += 1
-
-                errors.append(error)
-            finally:
-                pbar.update(1)
+            pbar.update(1)
 
     pbar.close()
-    return metadata, errors, error_counts
+    return metadata, err_track
 
 
 if __name__ == "__main__":
     with open(args.input) as f:
         ids = list(set(filter(None, map(lambda i: i.strip(), f.readlines()))))
     user_creds = get_user_creds(args.credentials, args.token, args.host, args.port)
-    metadata, errors, error_counts = asyncio.run(
+    metadata, err_track = asyncio.run(
         get_metadata(user_creds, ids, args.fields, args.concurrent, args.quota)
     )
-    if error_counts:
+    if err_track.counts:
         print("Error summary:")
-        for code, count in error_counts.items():
+        for code, count in err_track.counts.items():
             print(f"  {code}: {count}")
     with open(args.output, "w") as f:
-        json.dump({"metadata": metadata, "errors": errors}, f, indent=args.indent)
+        json.dump(
+            {"metadata": metadata, "errors": err_track.errors}, f, indent=args.indent
+        )
 
     if args.tsv:
         export_tsv(args)
