@@ -122,32 +122,32 @@ def get_user_creds(credentials_file, token_file, host, port):
     )
 
 
-async def get_metadata(user_creds, ids, fields, max_concurrent, quota):
+async def get_metadata(aiogoogle, drive, ids, fields, max_concurrent, quota):
     metadata = []
     err_track = ErrorTracker()
     pbar = tqdm(total=len(ids), unit="req")
-    async with Aiogoogle(user_creds=user_creds) as aiogoogle:
-        drive = await aiogoogle.discover("drive", "v3")
-        coros = [
-            aiogoogle.as_user(drive.files.get(fileId=id, fields=fields)) for id in ids
-        ]
-        for coro in rate_limited_as_completed(coros, max_concurrent, quota):
-            res = await err_track(coro)
-            if res:
-                metadata.append(res)
-            pbar.update(1)
+    coros = [aiogoogle.as_user(drive.files.get(fileId=id, fields=fields)) for id in ids]
+    for coro in rate_limited_as_completed(coros, max_concurrent, quota):
+        res = await err_track(coro)
+        if res:
+            metadata.append(res)
+        pbar.update(1)
 
     pbar.close()
     return metadata, err_track
 
 
-if __name__ == "__main__":
+async def main():
     with open(args.input) as f:
         ids = list(set(filter(None, map(lambda i: i.strip(), f.readlines()))))
+
     user_creds = get_user_creds(args.credentials, args.token, args.host, args.port)
-    metadata, err_track = asyncio.run(
-        get_metadata(user_creds, ids, args.fields, args.concurrent, args.quota)
-    )
+    async with Aiogoogle(user_creds=user_creds) as aiogoogle:
+        drive = await aiogoogle.discover("drive", "v3")
+        metadata, err_track = await get_metadata(
+            aiogoogle, drive, ids, args.fields, args.concurrent, args.quota
+        )
+
     if err_track.counts:
         print("Error summary:")
         for code, count in err_track.counts.items():
@@ -159,3 +159,7 @@ if __name__ == "__main__":
 
     if args.tsv:
         export_tsv(args)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
