@@ -2,6 +2,8 @@
 
 Fetch file metadata from the Google Drive API.
 
+Note: On September 13, 2021, Google Drive will [release a security update](https://workspaceupdates.googleblog.com/2021/06/drive-file-link-updates.html) which means that resource keys may be needed to view some files. This project does not support resource keys yet.
+
 ## Setup
 
 You will need a Google Account and a recent version of Python 3. (Tested on 3.9.)
