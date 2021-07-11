@@ -16,9 +16,6 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
-        "--tsv", metavar="FIELDS_FILE", help="File with fields to export as TSV"
-    )
-    parser.add_argument(
         "--quota",
         default=100,
         type=int,
@@ -81,7 +78,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from tqdm import tqdm
 
 from rate_limit import rate_limited_as_completed
-from tsv import export_tsv
 from util import ErrorTracker
 
 # We could also use `drive.metadata.readonly`, but the user might want to
@@ -156,9 +152,6 @@ async def main():
         json.dump(
             {"metadata": metadata, "errors": err_track.errors}, f, indent=args.indent
         )
-
-    if args.tsv:
-        export_tsv(args)
 
 
 if __name__ == "__main__":
