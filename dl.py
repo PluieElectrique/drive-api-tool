@@ -29,6 +29,7 @@ async def get_metadata_recursive(
     max_concurrent,
     quota,
     follow_shortcuts=True,
+    follow_parents=False,
 ):
     """Recursively fetch the metadata of a group of IDs."""
 
@@ -36,12 +37,12 @@ async def get_metadata_recursive(
     # have duplicate keys, so we add them for safety. It might add a bit of
     # overhead, but it's better than failing with an obscure error if those
     # fields are left out.
-    if fields is None:
-        fields = "id,mimeType,exportLinks"
-    else:
-        fields += ",id,mimeType,exportLinks"
+    fields = "" if fields is None else fields + ","
+    fields += "id,name,mimeType,owners,exportLinks"
     if follow_shortcuts:
         fields += ",shortcutDetails"
+    if follow_parents:
+        fields += ",parents"
 
     # We make requests in chunks of CHUNK_SIZE. Small chunks always prioritize
     # folders, but also defeat rate limiting. Big chunks fully utilize rate
@@ -68,17 +69,23 @@ async def get_metadata_recursive(
     pbar_total = len(ids_queue)
     pbar = tqdm(desc="Fetch metadata", total=pbar_total, unit="req")
 
-    def queue_folders_shortcuts(res):
-        """Queue folder and shortcut IDs. Returns the number of queued IDs."""
+    def queue_parent_folder_shortcut(res):
+        """Queue parent, folder, and shortcut IDs. Returns the number of queued IDs."""
         id = res["id"]
         mime_type = res["mimeType"]
+        queued = 0
+        if follow_parents:
+            for parent in res["parents"]:
+                if parent not in folders_seen and parent not in folders_queue:
+                    folders_queue.add(parent)
+                    queued += 1
         if (
             mime_type == "application/vnd.google-apps.folder"
             and id not in folders_seen
             and id not in folders_queue
         ):
             folders_queue.add(id)
-            return 1
+            queued += 1
         elif follow_shortcuts and mime_type == "application/vnd.google-apps.shortcut":
             target_id = res["shortcutDetails"]["targetId"]
             if target_id not in ids_seen and target_id not in ids_queue:
@@ -86,9 +93,9 @@ async def get_metadata_recursive(
                 # the folder queue if it's a folder. But, it's simpler to put
                 # everything in ids_queue.
                 ids_queue.add(target_id)
-                return 1
+                queued += 1
 
-        return 0
+        return queued
 
     async def wrap_coro(id, coro):
         return id, await coro
@@ -162,7 +169,7 @@ async def get_metadata_recursive(
                     items[id].children.append(child_id)
                     items[child_id].is_child = True
                     items[child_id].metadata = child
-                    pbar_total += queue_folders_shortcuts(child)
+                    pbar_total += queue_parent_folder_shortcut(child)
 
             pbar.total = pbar_total
             pbar.update(len(coros))
@@ -183,7 +190,7 @@ async def get_metadata_recursive(
                     continue
 
                 items[res["id"]].metadata = res
-                pbar_total += queue_folders_shortcuts(res)
+                pbar_total += queue_parent_folder_shortcut(res)
 
             pbar.total = pbar_total
             pbar.update(len(coros))
