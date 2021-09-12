@@ -210,9 +210,19 @@ async def get_metadata_recursive(
           id TEXT PRIMARY KEY NOT NULL,
           metadata TEXT NOT NULL
         );
+        """
+    )
+    metadata_c.execute(
+        """
+        CREATE TABLE hierarchy(
+          parent_id TEXT NOT NULL,
+          child_id TEXT NOY NULL,
+          UNIQUE (parent_id, child_id)
+        );
     """
     )
     metadata_queue = []
+    hierarchy_queue = []
 
     err_track = ErrorTracker()
 
@@ -259,6 +269,14 @@ async def get_metadata_recursive(
                 "INSERT OR REPLACE INTO metadata VALUES (?, ?)", metadata_queue
             )
             del metadata_queue[:]
+            metadata_conn.commit()
+
+    def check_queue2(metadata_conn, metadata_c, hierarchy_queue):
+        if len(hierarchy_queue) >= 1000:
+            metadata_c.executemany(
+                "INSERT OR IGNORE INTO hierarchy VALUES (?, ?)", hierarchy_queue
+            )
+            del hierarchy_queue[:]
             metadata_conn.commit()
 
     while folders_continue or folders_queue or ids_queue:
@@ -328,12 +346,14 @@ async def get_metadata_recursive(
                     #    # continue
 
                     items[id].children.append(child_id)
+                    hierarchy_queue.append((id, child_id))
                     items[child_id].is_child = True
                     # items[child_id].metadata = child
                     metadata_queue.append(
                         (child_id, zlib.compress(json.dumps(child).encode()))
                     )
                     check_queue(metadata_conn, metadata_c, metadata_queue)
+                    check_queue2(metadata_conn, metadata_c, hierarchy_queue)
                     pbar_total += queue_parent_folder_shortcut(child)
 
             pbar.total = pbar_total
@@ -371,6 +391,13 @@ async def get_metadata_recursive(
             "INSERT OR REPLACE INTO metadata VALUES (?, ?)", metadata_queue
         )
         metadata_queue = []
+        metadata_conn.commit()
+
+    if hierarchy_queue:
+        metadata_c.executemany(
+            "INSERT OR IGNORE INTO hierarchy VALUES (?, ?)", hierarchy_queue
+        )
+        del hierarchy_queue[:]
         metadata_conn.commit()
     metadata_conn.close()
 
