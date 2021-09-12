@@ -85,7 +85,7 @@ import os
 import pickle
 
 from aiogoogle import Aiogoogle
-from aiogoogle.auth.creds import UserCreds
+from aiogoogle.auth.creds import ClientCreds, UserCreds
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from tqdm import tqdm
@@ -101,7 +101,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 # We could do this in Aiogoogle, but having to setup an async web server is
 # annoying. It's easier to let Google's library handle this for us. There's no
 # gain to performing authorization asynchronously, anyway.
-def get_user_creds(credentials_file, token_file, host, port):
+def get_creds(credentials_file, token_file, host, port):
     creds = None
     if os.path.exists(token_file):
         with open(token_file, "rb") as f:
@@ -120,7 +120,7 @@ def get_user_creds(credentials_file, token_file, host, port):
     # Here are all the common attributes between google.oauth2.credentials.Credentials
     # and aiogoogle.auth.creds.UserCreds. UserCreds has more attributes, but
     # I'm guessing they're not required.
-    return UserCreds(
+    user_creds = UserCreds(
         access_token=creds.token,
         refresh_token=creds.refresh_token,
         expires_at=creds.expiry.isoformat(),
@@ -128,6 +128,12 @@ def get_user_creds(credentials_file, token_file, host, port):
         id_token=creds.id_token,
         token_uri=creds.token_uri,
     )
+    # The ID and secret are needed for refreshing the token
+    client_creds = ClientCreds(
+        client_id=creds.client_id,
+        client_secret=creds.client_secret,
+    )
+    return user_creds, client_creds
 
 
 async def get_metadata(aiogoogle, drive, ids, fields, max_concurrent, quota):
@@ -150,8 +156,10 @@ async def main(args):
     with open(args.input) as f:
         ids = list(set(filter(None, map(lambda i: i.strip(), f.readlines()))))
 
-    user_creds = get_user_creds(args.credentials, args.token, args.host, args.port)
-    async with Aiogoogle(user_creds=user_creds) as aiogoogle:
+    user_creds, client_creds = get_creds(
+        args.credentials, args.token, args.host, args.port
+    )
+    async with Aiogoogle(user_creds=user_creds, client_creds=client_creds) as aiogoogle:
         drive = await aiogoogle.discover("drive", "v3")
         if args.dl:
             err_track = await dl.main(ids, aiogoogle, drive, args)
