@@ -463,7 +463,7 @@ async def download_and_save(
 
         except Exception as exc:
             print(f"Failed to process item: {item=}, {path=}: {exc}")
-            raise exc
+            #raise exc
 
     for id, item in items.items():
         if not item.is_child:
@@ -476,7 +476,7 @@ async def download_and_save(
                 del item.metadata
             except Exception as exc:
                 print(f"Failed to process item: {item=}: {exc}")
-                raise exc
+                #raise exc
 
     if things_to_download:
         for coro in rate_limited_as_completed(
