@@ -454,7 +454,7 @@ async def download_and_save(
                         )
                     )
 
-                if len(things_to_download) > 10:
+                if len(things_to_download) > 25:
                     for coro in rate_limited_as_completed(
                         things_to_download, max_concurrent, quota
                     ):
@@ -463,7 +463,7 @@ async def download_and_save(
 
         except Exception as exc:
             print(f"Failed to process item: {item=}, {path=}: {exc}")
-            #raise exc
+            # raise exc
 
     for id, item in items.items():
         if not item.is_child:
@@ -476,7 +476,7 @@ async def download_and_save(
                 del item.metadata
             except Exception as exc:
                 print(f"Failed to process item: {item=}: {exc}")
-                #raise exc
+                # raise exc
 
     if things_to_download:
         for coro in rate_limited_as_completed(
@@ -489,6 +489,11 @@ async def download_and_save(
 
 
 async def main(ids, aiogoogle, drive, args):
+    # XXX Very hacky way to increase chunk size
+    import aiogoogle.models as aiogoogle_models
+
+    aiogoogle_models.DEFAULT_DOWNLOAD_CHUNK_SIZE = 5 * 1024 * 1024
+
     os.makedirs(args.output, exist_ok=True)
     metadata, err_track, db_name = await get_metadata_recursive(
         ids,
