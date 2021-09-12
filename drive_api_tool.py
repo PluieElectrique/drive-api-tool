@@ -5,7 +5,19 @@ if __name__ == "__main__":
         description="Fetch file metadata from the Google Drive API."
     )
     parser.add_argument("input", help="File with one Drive ID per line")
-    parser.add_argument("output", help="JSON file to store fetched metadata and errors")
+    parser.add_argument(
+        "output",
+        help="JSON file to store fetched data (in normal mode) or output directory (in dl mode)",
+    )
+    parser.add_argument(
+        "--dl", action="store_true", help="Recursively download files and metadata"
+    )
+    parser.add_argument(
+        "--follow-shortcuts", action="store_true", help="Follow shortcuts in dl mode"
+    )
+    parser.add_argument(
+        "--follow-parents", action="store_true", help="Follow parent folders in dl mode"
+    )
     parser.add_argument(
         "--fields",
         default=None,
@@ -67,6 +79,7 @@ if __name__ == "__main__":
 
 
 import asyncio
+from datetime import datetime
 import json
 import os
 import pickle
@@ -77,11 +90,10 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from tqdm import tqdm
 
+import dl
 from rate_limit import rate_limited_as_completed
-from util import ErrorTracker
+from util import ErrorTracker, sanitize_filename
 
-# We could also use `drive.metadata.readonly`, but the user might want to
-# scrape `downloadUrl` or `contentHints.thumbnail`.
 # See all scopes at: https://developers.google.com/drive/api/v3/about-auth#OAuth2Scope
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
@@ -123,6 +135,7 @@ async def get_metadata(aiogoogle, drive, ids, fields, max_concurrent, quota):
     err_track = ErrorTracker()
     pbar = tqdm(total=len(ids), unit="req")
     coros = [aiogoogle.as_user(drive.files.get(fileId=id, fields=fields)) for id in ids]
+    # coros = [aiogoogle.as_user(drive.files.get(fileId=id, download_file="test-path.data", alt="media", validate=False)) for id in ids]
     for coro in rate_limited_as_completed(coros, max_concurrent, quota):
         res = await err_track(coro)
         if res:
@@ -133,26 +146,50 @@ async def get_metadata(aiogoogle, drive, ids, fields, max_concurrent, quota):
     return metadata, err_track
 
 
-async def main():
+async def main(args):
     with open(args.input) as f:
         ids = list(set(filter(None, map(lambda i: i.strip(), f.readlines()))))
 
     user_creds = get_user_creds(args.credentials, args.token, args.host, args.port)
     async with Aiogoogle(user_creds=user_creds) as aiogoogle:
         drive = await aiogoogle.discover("drive", "v3")
-        metadata, err_track = await get_metadata(
-            aiogoogle, drive, ids, args.fields, args.concurrent, args.quota
-        )
+        if args.dl:
+            err_track = await dl.main(ids, aiogoogle, drive, args)
+        else:
+            metadata, err_track = await get_metadata(
+                aiogoogle, drive, ids, args.fields, args.concurrent, args.quota
+            )
 
+            with open(args.output, "w") as f:
+                json.dump(
+                    {"metadata": metadata, "errors": err_track.errors},
+                    f,
+                    indent=args.indent,
+                )
+
+    print("Error summary:")
     if err_track.counts:
-        print("Error summary:")
         for code, count in err_track.counts.items():
             print(f"  {code}: {count}")
-    with open(args.output, "w") as f:
-        json.dump(
-            {"metadata": metadata, "errors": err_track.errors}, f, indent=args.indent
+
+        # Not UTC or ISO 8601, but it's readable and filename-safe
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        error_filename = "drive_errors_"
+        # TODO forbidden blah
+        error_filename += sanitize_filename(
+            args.input, len(error_filename) + 1 + len(now) + 5, None
         )
+        error_filename += "_" + now + ".json"
+        with open(error_filename, "w") as f:
+            json.dump(
+                {"errors": err_track.errors},
+                f,
+                indent=args.indent,
+            )
+        print(f"Errors written to: {error_filename}")
+    else:
+        print("  No errors.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(args))

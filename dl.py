@@ -1,15 +1,68 @@
+WORKSPACE_EXPORT = {
+    "application/vnd.google-apps.document": [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "application/vnd.google-apps.spreadsheet": [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ],
+    "application/vnd.google-apps.drawing": ["image/png"],
+    "application/vnd.google-apps.presentation": [
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ],
+    "application/vnd.google-apps.script": ["application/vnd.google-apps.script+json"],
+}
+
+
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime
+import json
+import os
+import sqlite3
+import zlib
 
 from tqdm import tqdm
 
 from rate_limit import rate_limited_as_completed
-from util import ErrorTracker
+from util import ErrorTracker, sanitize_filename
 
 # Number of results to return per folder contents request (`files.list`). Must
 # be between 1 and 1000, inclusive. I assume that the biggest page size means
 # the fewest requests and so the fastest speed.
 PAGE_SIZE = 1000
+
+WORKSPACE_MIME_TYPES = [
+    "application/vnd.google-apps.document",
+    "application/vnd.google-apps.drawing",
+    "application/vnd.google-apps.presentation",
+    "application/vnd.google-apps.script",
+    "application/vnd.google-apps.spreadsheet",
+]
+
+# https://developers.google.com/drive/api/v3/ref-export-formats
+WORKSPACE_EXPORT_MIME_EXTENSION = {
+    "application/epub+zip": ".epub",
+    "application/pdf": ".pdf",
+    "application/rtf": ".rtf",
+    "application/vnd.google-apps.script+json": ".json",
+    "application/vnd.oasis.opendocument.presentation": ".odp",
+    "application/vnd.oasis.opendocument.text": ".odt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/x-vnd.oasis.opendocument.spreadsheet": ".ods",
+    "application/zip": ".zip",
+    "image/jpeg": ".jpeg",
+    "image/png": ".png",
+    "image/svg+xml": ".svg",
+    "text/csv": ".csv",
+    "text/html": ".html",
+    "text/plain": ".txt",
+    "text/tab-separated-values": ".tsv",
+}
+WORKSPACE_EXPORT_MIME_EXTENSION_MAX_LEN = max(
+    len(e) for e in WORKSPACE_EXPORT_MIME_EXTENSION.values()
+)
 
 
 @dataclass
@@ -20,6 +73,82 @@ class Item:
     is_child: bool = False
     children: list = field(default_factory=list)
 
+    def __getitem__(self, key):
+        return self.metadata[key]
+
+    def get(self, key):
+        return self.metadata.get(key)
+
+    def is_folder(self):
+        return self["mimeType"] == "application/vnd.google-apps.folder"
+
+    def is_workspace_doc(self):
+        return self["mimeType"] in WORKSPACE_MIME_TYPES
+
+    def filename(self, forbidden_sub=None):
+        """Filename for saving this item to disk."""
+        # Folder:              {name}_{id}
+        # Exported document:   {name}_{id}_{version}  (no extension but leave space for it)
+        # File with extension: {name w/o extension}_{id}_{version}.{extension}
+        # File w/o extension:  {name}_{id}_{version}
+        #
+        # If the entire filename is too long, {name} is truncated until it fits.
+        # Append ".json" for the metadata filename. (This means that each
+        # filename must leave 5 characters for this suffix.)
+
+        name = self["name"]
+        id = self["id"]
+        version = self["version"]
+        extension = self.get("fullFileExtension")
+
+        # Reserve space for ".json"
+        reserved_space = 5
+
+        if self.is_folder():
+            suffix = f"_{id}"
+        elif self.is_workspace_doc():
+            suffix = f"_{id}_{version}"
+            reserved_space += WORKSPACE_EXPORT_MIME_EXTENSION_MAX_LEN
+        elif extension is not None and name.endswith(extension):
+            # The .endswith check is because the "fullFileExtension" field "is
+            # not cleared if the new name does not contain a valid extension."
+            # (https://developers.google.com/drive/api/v3/reference/files)
+
+            suffix = f"_{id}_{version}.{extension}"
+            name = name[: -(1 + len(extension))]
+        else:
+            suffix = f"_{id}_{version}"
+
+        reserved_space += len(suffix)
+        filename = sanitize_filename(name, reserved_space, forbidden_sub)
+        return filename + suffix
+
+    def owner_foldernames(self, forbidden_sub=None):
+        # Return a list because "Only certain legacy files may have more than one owner."
+        names = []
+        for owner in self["owners"]:
+            # "[emailAddress] may not be present in certain contexts if the
+            # user has not made their email address visible to the requester."
+            if "emailAddress" in owner:
+                # Apparently, emails can include forbidden characters. Google
+                # probably forbids this, but you can never be too sure.
+                # Also, emails can't end with a period, so we don't have to worry about that.
+                # (https://en.wikipedia.org/wiki/Email_address#Local-part)
+                suffix = sanitize_filename(
+                    owner["emailAddress"], forbidden_sub=forbidden_sub
+                )
+            else:
+                # Each ID is a number (as a string)
+                suffix = owner["permissionId"]
+
+            # Leave space for "_", suffix, and ".json"
+            name = sanitize_filename(
+                owner["displayName"], 1 + len(suffix) + 5, forbidden_sub
+            )
+            names.append(name + "_" + suffix)
+
+        return names
+
 
 async def get_metadata_recursive(
     initial_ids,
@@ -28,6 +157,7 @@ async def get_metadata_recursive(
     fields,
     max_concurrent,
     quota,
+    out_dir,
     follow_shortcuts=True,
     follow_parents=False,
 ):
@@ -37,12 +167,13 @@ async def get_metadata_recursive(
     # have duplicate keys, so we add them for safety. It might add a bit of
     # overhead, but it's better than failing with an obscure error if those
     # fields are left out.
-    fields = "" if fields is None else fields + ","
-    fields += "id,name,mimeType,owners,exportLinks"
-    if follow_shortcuts:
-        fields += ",shortcutDetails"
-    if follow_parents:
-        fields += ",parents"
+    if fields != "*":
+        fields = "" if fields is None else fields + ","
+        fields += "id,name,mimeType,owners(displayName,permissionId,emailAddress),version,fullFileExtension"
+        if follow_shortcuts:
+            fields += ",shortcutDetails"
+        if follow_parents:
+            fields += ",parents"
 
     # We make requests in chunks of CHUNK_SIZE. Small chunks always prioritize
     # folders, but also defeat rate limiting. Big chunks fully utilize rate
@@ -64,6 +195,25 @@ async def get_metadata_recursive(
     folders_continue = []
 
     items = defaultdict(Item)
+    # Not UTC or ISO 8601, but it's readable and filename-safe
+    metadata_db = (
+        os.path.join(
+            out_dir, "drive_temp_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        )
+        + ".db"
+    )
+    metadata_conn = sqlite3.connect(metadata_db)
+    metadata_c = metadata_conn.cursor()
+    metadata_c.execute(
+        """
+        CREATE TABLE metadata(
+          id TEXT PRIMARY KEY NOT NULL,
+          metadata TEXT NOT NULL
+        );
+    """
+    )
+    metadata_queue = []
+
     err_track = ErrorTracker()
 
     pbar_total = len(ids_queue)
@@ -74,7 +224,7 @@ async def get_metadata_recursive(
         id = res["id"]
         mime_type = res["mimeType"]
         queued = 0
-        if follow_parents:
+        if follow_parents and "parents" in res:
             for parent in res["parents"]:
                 if parent not in folders_seen and parent not in folders_queue:
                     folders_queue.add(parent)
@@ -99,6 +249,17 @@ async def get_metadata_recursive(
 
     async def wrap_coro(id, coro):
         return id, await coro
+
+    def check_queue(metadata_conn, metadata_c, metadata_queue):
+        if len(metadata_queue) >= 1000:
+            # Should be okay to replace b/c the metadata should be the same anyway
+            # but maybe some fields are populated the more we explore, e.g. parents might include more folders
+            # if we've discovered more folders
+            metadata_c.executemany(
+                "INSERT OR REPLACE INTO metadata VALUES (?, ?)", metadata_queue
+            )
+            del metadata_queue[:]
+            metadata_conn.commit()
 
     while folders_continue or folders_queue or ids_queue:
         # Prioritize folders: they return more metadata per request
@@ -156,19 +317,23 @@ async def get_metadata_recursive(
                         # If it wasn't, we'll skip the decrement.
                         pass
 
-                    if items[child_id].is_child:
-                        # If this is true, then this child has two parents. For
-                        # consistency, we'll ignore parents other than the
-                        # first. For more info, see:
-                        # https://developers.google.com/drive/api/v3/ref-single-parent
-                        print(
-                            f"Warning: folder {id} is not the only parent of {child_id}"
-                        )
-                        continue
+                    # if items[child_id].is_child:
+                    #    # If this is true, then this child has two parents. For
+                    #    # consistency, we'll ignore parents other than the
+                    #    # first. For more info, see:
+                    #    # https://developers.google.com/drive/api/v3/ref-single-parent
+                    #    print(
+                    #        f"Warning: folder {id} is not the only parent of {child_id}"
+                    #    )
+                    #    # continue
 
                     items[id].children.append(child_id)
                     items[child_id].is_child = True
-                    items[child_id].metadata = child
+                    # items[child_id].metadata = child
+                    metadata_queue.append(
+                        (child_id, zlib.compress(json.dumps(child).encode()))
+                    )
+                    check_queue(metadata_conn, metadata_c, metadata_queue)
                     pbar_total += queue_parent_folder_shortcut(child)
 
             pbar.total = pbar_total
@@ -189,12 +354,165 @@ async def get_metadata_recursive(
                 if not res:
                     continue
 
-                items[res["id"]].metadata = res
+                # items[res["id"]].metadata = res
+                # BLAH WE STILL NEED THIS
+                items[res["id"]].metadata = None
+                metadata_queue.append(
+                    (res["id"], zlib.compress(json.dumps(res).encode()))
+                )
+                check_queue(metadata_conn, metadata_c, metadata_queue)
                 pbar_total += queue_parent_folder_shortcut(res)
 
             pbar.total = pbar_total
             pbar.update(len(coros))
 
+    if metadata_queue:
+        metadata_c.executemany(
+            "INSERT OR REPLACE INTO metadata VALUES (?, ?)", metadata_queue
+        )
+        metadata_queue = []
+        metadata_conn.commit()
+    metadata_conn.close()
+
     pbar.close()
 
-    return items, err_track
+    return items, err_track, metadata_db
+
+
+def try_mkdir(path):
+    try:
+        os.mkdir(path)
+    except FileExistsError:
+        pass
+
+
+things_to_download = []
+# TODO just pass args?
+async def download_and_save(
+    items,
+    db_name,
+    out_dir,
+    aiogoogle,
+    drive,
+    max_concurrent,
+    quota,
+    workspace_export_mime_types,
+    indent,
+    forbidden_sub=None,
+):
+    global things_to_download
+    things_to_download = []
+    pbar = tqdm(desc="Create folders, dump metadata", total=len(items), unit="file")
+
+    metadata_conn = sqlite3.connect(db_name)
+    metadata_c = metadata_conn.cursor()
+
+    def load_metadata(id):
+        m = metadata_c.execute(f"SELECT metadata FROM metadata WHERE id = '{id}'")
+        return json.loads(zlib.decompress(m.fetchone()[0]))
+
+    async def create_folders_dump_metadata(path, item):
+        global things_to_download
+        try:
+            item_path = os.path.join(path, item.filename())
+            with open(item_path + ".json", "w") as f:
+                json.dump(item.metadata, f, indent=indent)
+
+            pbar.update(1)
+
+            if item.is_folder():
+                try_mkdir(item_path)
+                for child_id in item.children:
+                    child = items[child_id]
+                    child.metadata = load_metadata(child_id)
+                    await create_folders_dump_metadata(item_path, child)
+                    del child.metadata
+            else:
+                if item.is_workspace_doc():
+                    for mime in WORKSPACE_EXPORT[item["mimeType"]]:
+                        ext = WORKSPACE_EXPORT_MIME_EXTENSION[mime]
+                        things_to_download.append(
+                            aiogoogle.as_user(
+                                drive.files.export(
+                                    fileId=item["id"],
+                                    mimeType=mime,
+                                    download_file=item_path + ext,
+                                    alt="media",
+                                    validate=False,
+                                )
+                            )
+                        )
+                else:
+                    things_to_download.append(
+                        aiogoogle.as_user(
+                            drive.files.get(
+                                fileId=item["id"],
+                                download_file=item_path,
+                                alt="media",
+                                validate=False,
+                            )
+                        )
+                    )
+
+                if len(things_to_download) > 10:
+                    for coro in rate_limited_as_completed(
+                        things_to_download, max_concurrent, quota
+                    ):
+                        res = await coro
+                    things_to_download = []
+
+        except Exception as exc:
+            print(f"Failed to process item: {item=}, {path=}: {exc}")
+            raise exc
+
+    for id, item in items.items():
+        if not item.is_child:
+            try:
+                item.metadata = load_metadata(id)
+                for owner_foldername in item.owner_foldernames():
+                    path = os.path.join(out_dir, owner_foldername)
+                    try_mkdir(path)
+                    await create_folders_dump_metadata(path, item)
+                del item.metadata
+            except Exception as exc:
+                print(f"Failed to process item: {item=}: {exc}")
+                raise exc
+
+    if things_to_download:
+        for coro in rate_limited_as_completed(
+            things_to_download, max_concurrent, quota
+        ):
+            res = await coro
+        things_to_download = []
+    metadata_conn.close()
+    pbar.close()
+
+
+async def main(ids, aiogoogle, drive, args):
+    os.makedirs(args.output, exist_ok=True)
+    metadata, err_track, db_name = await get_metadata_recursive(
+        ids,
+        aiogoogle,
+        drive,
+        args.fields,
+        args.concurrent,
+        args.quota,
+        args.output,
+        args.follow_shortcuts,
+        args.follow_parents,
+    )
+
+    await download_and_save(
+        metadata,
+        db_name,
+        args.output,
+        aiogoogle,
+        drive,
+        args.concurrent,
+        args.quota,
+        None,
+        args.indent,
+        None,
+    )
+
+    return err_track

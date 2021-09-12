@@ -1,4 +1,51 @@
 from collections import defaultdict
+import re
+
+ASCII_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+FILENAME_FORBIDDEN = re.compile(r'[\\/:*?"<>|]')
+LEADING_DASH_DOT = re.compile(r"_*[-.]")
+TRAILING_DOTS = re.compile(r"\.+$")
+
+# TODO https://en.wikipedia.org/wiki/Comparison_of_file_systems#Limits
+MAX_BYTES = 255
+
+FORBIDDEN_SUB = {
+    "\\": "⧹",
+    "/": "⧸",
+    ":": "꞉",
+    "*": "∗",
+    "?": "？",
+    '"': "″",
+    "<": "﹤",
+    ">": "﹥",
+    "|": "￨",
+}
+
+
+def sanitize_filename(filename, reserved_space=0, forbidden_sub=None):
+    forbidden_sub = FORBIDDEN_SUB
+    filename = ASCII_CONTROL.sub("", filename)
+    if forbidden_sub is None:
+        # The forbidden characters are common enough that we replace them with an
+        # underscore to show that a character was replaced.
+        filename = FILENAME_FORBIDDEN.sub("_", filename)
+    else:
+        filename = FILENAME_FORBIDDEN.sub(lambda m: forbidden_sub[m[0]], filename)
+    filename = filename.strip()
+    # Prepend an underscore to files starting with a dot or dash--this prevents
+    # the file from being hidden or being interpreted as a flag on Unix-likes.
+    # We need _* to ensure that prepending an underscore doesn't conflict with
+    # any existing files.
+    if LEADING_DASH_DOT.match(filename):
+        filename = "_" + filename
+    # Limit the filename to `MAX_BYTES - reserved_space` at most. We assume UTF-8.
+    max_bytes = MAX_BYTES - reserved_space
+    encoded = filename.encode()
+    if len(encoded) > max_bytes:
+        filename = encoded[:max_bytes].decode(errors="ignore")
+        # Truncation might have exposed trailing spaces, so we strip again.
+        filename = filename.strip()
+    return filename
 
 
 class ErrorTracker:
