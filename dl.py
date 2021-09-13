@@ -248,6 +248,7 @@ def restore_queues(original_ids, db_name):
     # OUTPUTTING!!!!
     export_folders_queue = redo_folder
     export_folders_seen = folder_ids - export_folders_queue
+
     export_ids_seen = non_folder_ids
     original_and_children_non_folder = (
         set(original_ids) | actual_children_hierarchy
@@ -258,8 +259,8 @@ def restore_queues(original_ids, db_name):
 
     print("Total IDs:", id_total)
     print("Restored IDs:")
-    print("  folders_queue:", len(export_folders_queue))
     print("  folders_seen :", len(export_folders_seen))
+    print("  folders_queue:", len(export_folders_queue))
     print("  ids_seen     :", len(export_ids_seen))
     print("  ids_queue    :", len(export_ids_queue))
 
