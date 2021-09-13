@@ -465,10 +465,10 @@ async def download_and_save(
 
             if item.is_folder():
                 try_mkdir(item_path)
-                item.children = load_children(id)
                 for child_id in item.children:
                     child = Item()
                     child.metadata = load_metadata(child_id)
+                    child.children = load_children(child_id)
                     await create_folders_dump_metadata(item_path, child)
                     del child.metadata
                 del item.children
@@ -513,6 +513,7 @@ async def download_and_save(
     for id in ids:
         item = Item()
         item.is_child = is_child(id)
+        item.children = load_children(id)
         if not item.is_child:
             try:
                 item.metadata = load_metadata(id)
