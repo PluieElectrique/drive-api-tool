@@ -194,7 +194,7 @@ async def get_metadata_recursive(
     # page tokens.
     folders_continue = []
 
-    items = defaultdict(Item)
+    # items = defaultdict(Item)
     # Not UTC or ISO 8601, but it's readable and filename-safe
     metadata_db = (
         os.path.join(
@@ -345,9 +345,9 @@ async def get_metadata_recursive(
                     #    )
                     #    # continue
 
-                    items[id].children.append(child_id)
+                    # items[id].children.append(child_id)
                     hierarchy_queue.append((id, child_id))
-                    items[child_id].is_child = True
+                    # items[child_id].is_child = True
                     # items[child_id].metadata = child
                     metadata_queue.append(
                         (child_id, zlib.compress(json.dumps(child).encode()))
@@ -376,7 +376,7 @@ async def get_metadata_recursive(
 
                 # items[res["id"]].metadata = res
                 # BLAH WE STILL NEED THIS
-                items[res["id"]].metadata = None
+                # items[res["id"]].metadata = None
                 metadata_queue.append(
                     (res["id"], zlib.compress(json.dumps(res).encode()))
                 )
@@ -403,7 +403,7 @@ async def get_metadata_recursive(
 
     pbar.close()
 
-    return items, err_track, metadata_db
+    return err_track, metadata_db
 
 
 def try_mkdir(path):
@@ -416,7 +416,6 @@ def try_mkdir(path):
 things_to_download = []
 # TODO just pass args?
 async def download_and_save(
-    items,
     db_name,
     out_dir,
     aiogoogle,
@@ -429,7 +428,6 @@ async def download_and_save(
 ):
     global things_to_download
     things_to_download = []
-    pbar = tqdm(desc="Create folders, dump metadata", total=len(items), unit="file")
 
     metadata_conn = sqlite3.connect(db_name)
     metadata_c = metadata_conn.cursor()
@@ -437,6 +435,24 @@ async def download_and_save(
     def load_metadata(id):
         m = metadata_c.execute(f"SELECT metadata FROM metadata WHERE id = '{id}'")
         return json.loads(zlib.decompress(m.fetchone()[0]))
+
+    def load_children(id):
+        c = metadata_c.execute(
+            f"SELECT child_id FROM hierarchy WHERE parent_id = '{id}'"
+        )
+        return [e[0] for e in c.fetchall()]
+
+    def is_child(id):
+        c = metadata_c.execute(f"SELECT 1 FROM hierarchy WHERE child_id = '{id}'")
+        return c.fetchone() is not None
+
+    def get_ids():
+        c = metadata_c.execute("SELECT id FROM metadata")
+        return [e[0] for e in c.fetchall()]
+
+    ids = get_ids()
+
+    pbar = tqdm(desc="Create folders, dump metadata", total=len(ids), unit="file")
 
     async def create_folders_dump_metadata(path, item):
         global things_to_download
@@ -449,11 +465,13 @@ async def download_and_save(
 
             if item.is_folder():
                 try_mkdir(item_path)
+                item.children = load_children(id)
                 for child_id in item.children:
-                    child = items[child_id]
+                    child = Item()
                     child.metadata = load_metadata(child_id)
                     await create_folders_dump_metadata(item_path, child)
                     del child.metadata
+                del item.children
             else:
                 if item.is_workspace_doc():
                     for mime in WORKSPACE_EXPORT[item["mimeType"]]:
@@ -492,7 +510,9 @@ async def download_and_save(
             print(f"Failed to process item: {item=}, {path=}: {exc}")
             # raise exc
 
-    for id, item in items.items():
+    for id in ids:
+        item = Item()
+        item.is_child = is_child(id)
         if not item.is_child:
             try:
                 item.metadata = load_metadata(id)
@@ -522,7 +542,7 @@ async def main(ids, aiogoogle, drive, args):
     aiogoogle_models.DEFAULT_DOWNLOAD_CHUNK_SIZE = 5 * 1024 * 1024
 
     os.makedirs(args.output, exist_ok=True)
-    metadata, err_track, db_name = await get_metadata_recursive(
+    err_track, db_name = await get_metadata_recursive(
         ids,
         aiogoogle,
         drive,
@@ -535,7 +555,6 @@ async def main(ids, aiogoogle, drive, args):
     )
 
     await download_and_save(
-        metadata,
         db_name,
         args.output,
         aiogoogle,
