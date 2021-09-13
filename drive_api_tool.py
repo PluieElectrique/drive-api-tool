@@ -19,6 +19,12 @@ if __name__ == "__main__":
         "--follow-parents", action="store_true", help="Follow parent folders in dl mode"
     )
     parser.add_argument(
+        "--restore",
+        default=None,
+        type=str,
+        help="Path to DB for restoring from failed metadata fetch",
+    )
+    parser.add_argument(
         "--fields",
         default=None,
         type=str,

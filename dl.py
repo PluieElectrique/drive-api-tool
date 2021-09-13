@@ -13,7 +13,6 @@ WORKSPACE_EXPORT = {
 }
 
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -150,6 +149,123 @@ class Item:
         return names
 
 
+def restore_queues(original_ids, db_name):
+    # we want to redo:
+    #   - folders with no children (might mean that it was in the queue, hadn't been done yet)
+    #   - folders near the end of metadata (might have lost some children from batched sqlite)
+    #   - folders near the end of hierarchy (same)
+    #   - anything not in both metadata and hierarchy (maybe lost due to something)
+
+    # read entire db
+    # find all IDs which are folders
+    # read hierarchy
+    # find all folder IDs with no children
+    #
+    # look at N last metadata
+    # pull folder ids
+    # look at N last hierarchy
+    # pull folder ids
+    #
+    # take in items
+    # get rid of any in intersection(metadata, hierarchy parent/child)
+    # add in folders with no children, folder ids
+    #
+    # this forms the queue
+    # also populate seen
+
+    # SETUP DB
+    conn = sqlite3.connect(db_name)
+    cur = conn.cursor()
+    BATCH_SIZE = 25000
+
+    # GET ID COUNT TOTAL
+    cur.execute("SELECT COUNT(*) FROM metadata")
+    id_total = cur.fetchone()[0]
+
+    # READ ENTIRE DB TO GET IDS AND FOLDER IDS
+    folder_ids = set()
+    non_folder_ids = set()
+    pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
+    for offset in range(0, id_total, BATCH_SIZE):
+        cur.execute(
+            f"SELECT id, metadata FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
+        )
+        for id, metadata in cur.fetchall():
+            metadata = json.loads(zlib.decompress(metadata))
+            if metadata["mimeType"] == "application/vnd.google-apps.folder":
+                folder_ids.add(id)
+            else:
+                non_folder_ids.add(id)
+            pbar.update(1)
+    pbar.close()
+
+    # READ HIERARCHY TO FIND FOLDERS WITH NO CHILDREN
+    print("Finding folders with no children")
+    cur.execute("SELECT DISTINCT(parent_id) FROM hierarchy")
+    have_children = set(e[0] for e in cur.fetchall())
+
+    # READ HIERARCHY TO DOUBLE CHECK WHICH IDS WEVE ACTUALLY SEEN
+    cur.execute("SELECT DISTINCT(child_id) FROM hierarchy")
+    actual_children_hierarchy = set(e[0] for e in cur.fetchall())
+
+    # GET LAST N
+    N = 1000 * 2  # Should be safe enough I think
+    BACKUP = 50  # Get at least this many folders
+
+    # GET LAST N METADATA
+    # NO WE DONT DO IT BEACUSE IDS ARE RANDOM
+    # we dump in a set so there's no guarantee children are processed in order from parents
+    # print(f"Getting last {N} metadata")
+    # cur.execute(
+    #    f"SELECT DISTINCT id FROM (SELECT id FROM metadata ORDER BY rowid DESC LIMIT {N})"
+    # )
+    # last_n_metadata_id = set(e[0] for e in cur.fetchall())
+    # GET LAST N HIERARCHY
+    print(f"Getting parent folders from hierarchy last {N}")
+    cur.execute(
+        f"SELECT DISTINCT parent_id FROM (SELECT parent_id FROM hierarchy ORDER BY rowid DESC LIMIT {N})"
+    )
+    last_n_parent_id = set(e[0] for e in cur.fetchall())
+    print(f"    Found: {len(last_n_parent_id)}")
+    # extra extra safe--do a minimum
+    if len(last_n_parent_id) < BACKUP:
+        print(f"    Applying backup of {BACKUP}")
+        cur.execute(
+            f"SELECT DISTINCT parent_id FROM hierarchy ORDER BY rowid DESC LIMIT {BACKUP}"
+        )
+        last_n_parent_id |= set(e[0] for e in cur.fetchall())
+
+    conn.close()
+
+    print("Finding final seen/queue sets")
+
+    # FOLDERS WE NEED TO REDO = no children + N last with no children
+    # also folders which have children but no metadata
+    redo_folder = (folder_ids - have_children) | (have_children - folder_ids)
+    # redo_folder |= last_n_metadata_id & (folder_ids | have_children)
+    redo_folder |= last_n_parent_id
+
+    # OUTPUTTING!!!!
+    export_folders_queue = redo_folder
+    export_folders_seen = folder_ids - export_folders_queue
+    export_ids_seen = non_folder_ids
+    original_and_children_non_folder = (
+        set(original_ids) | actual_children_hierarchy
+    ) - (export_folders_queue | export_folders_seen)
+    export_ids_queue = (
+        original_and_children_non_folder | non_folder_ids
+    ) - export_ids_seen
+
+    print("Total IDs:", id_total)
+    print("Restored IDs:")
+    print("  folders_queue:", len(export_folders_queue))
+    print("  folders_seen :", len(export_folders_seen))
+    print("  ids_seen     :", len(export_ids_seen))
+    print("  ids_queue    :", len(export_ids_queue))
+
+    return export_folders_queue, export_folders_seen, export_ids_queue, export_ids_seen
+
+
 async def get_metadata_recursive(
     initial_ids,
     aiogoogle,
@@ -160,6 +276,7 @@ async def get_metadata_recursive(
     out_dir,
     follow_shortcuts=True,
     follow_parents=False,
+    restore=None,
 ):
     """Recursively fetch the metadata of a group of IDs."""
 
@@ -185,23 +302,31 @@ async def get_metadata_recursive(
     # rate_limited_as_completed. But, that can't work with the current design.
     CHUNK_SIZE = quota * 5
 
-    ids_queue = set(initial_ids)
-    ids_seen = set()
-
-    folders_queue = set()
-    folders_seen = set()
     # For folders that require multiple requests, we store their IDs and next
     # page tokens.
     folders_continue = []
 
     # items = defaultdict(Item)
-    # Not UTC or ISO 8601, but it's readable and filename-safe
-    metadata_db = (
-        os.path.join(
-            out_dir, "drive_temp_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    if restore is None:
+        ids_queue = set(initial_ids)
+        ids_seen = set()
+        folders_queue = set()
+        folders_seen = set()
+
+        # Not UTC or ISO 8601, but it's readable and filename-safe
+        metadata_db = (
+            os.path.join(
+                out_dir, "drive_temp_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            )
+            + ".db"
         )
-        + ".db"
-    )
+    else:
+        metadata_db = restore
+        folders_queue, folders_seen, ids_queue, ids_seen = restore_queues(
+            initial_ids, metadata_db
+        )
+
     metadata_conn = sqlite3.connect(metadata_db)
     metadata_c = metadata_conn.cursor()
     metadata_c.execute(
@@ -553,6 +678,7 @@ async def main(ids, aiogoogle, drive, args):
         args.output,
         args.follow_shortcuts,
         args.follow_parents,
+        args.restore,
     )
 
     await download_and_save(
