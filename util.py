@@ -1,6 +1,8 @@
 from collections import defaultdict
 import re
 
+from aiogoogle.excs import HTTPError
+
 ASCII_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 FILENAME_FORBIDDEN = re.compile(r'[\\/:*?"<>|]')
 LEADING_DASH_DOT = re.compile(r"_*[-.]")
@@ -54,11 +56,20 @@ class ErrorTracker:
     def __init__(self):
         self.errors = []
         self.counts = defaultdict(int)
+        self.total = 0
+
+    def print_errors(self):
+        print("Error summary:")
+        if self.counts:
+            for code, count in self.counts.items():
+                print(f"  {code}: {count}")
+        else:
+            print("  No errors.")
 
     async def __call__(self, coro):
         try:
             return await coro
-        except Exception as exc:
+        except HTTPError as exc:
             error = {"url": exc.req.url}
             if exc.res.json is not None and "error" in exc.res.json:
                 json_error = exc.res.json["error"]
@@ -69,5 +80,10 @@ class ErrorTracker:
                     }
                 )
                 self.counts[error["code"]] += 1
+                self.total += 1
+                if self.total % 5000 == 0:
+                    self.print_errors()
 
             self.errors.append(error)
+        except Exception as exc:
+            print(exc)
