@@ -206,7 +206,7 @@ async def get_metadata_recursive(
     metadata_c = metadata_conn.cursor()
     metadata_c.execute(
         """
-        CREATE TABLE metadata(
+        CREATE TABLE IF NOT EXISTS metadata(
           id TEXT PRIMARY KEY NOT NULL,
           metadata TEXT NOT NULL
         );
@@ -214,7 +214,7 @@ async def get_metadata_recursive(
     )
     metadata_c.execute(
         """
-        CREATE TABLE hierarchy(
+        CREATE TABLE IF NOT EXISTS hierarchy(
           parent_id TEXT NOT NULL,
           child_id TEXT NOY NULL,
           UNIQUE (parent_id, child_id)
