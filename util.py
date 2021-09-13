@@ -1,4 +1,6 @@
 from collections import defaultdict
+from datetime import datetime
+import json
 import re
 
 from aiogoogle.excs import HTTPError
@@ -53,16 +55,24 @@ def sanitize_filename(filename, reserved_space=0, forbidden_sub=None):
 class ErrorTracker:
     """Filter out and track errors from Aiogoogle coroutines."""
 
-    def __init__(self):
+    def __init__(self, indent=None):
         self.errors = []
         self.counts = defaultdict(int)
         self.total = 0
+
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.filename = f"drive_errors_{now}.json"
+        self.indent = indent
 
     def print_errors(self):
         print("Error summary:")
         if self.counts:
             for code, count in self.counts.items():
                 print(f"  {code}: {count}")
+
+            with open(self.filename, "w") as f:
+                json.dump(self.errors, f, indent=self.indent)
+            print(f"Wrote errors to {self.filename}")
         else:
             print("  No errors.")
 

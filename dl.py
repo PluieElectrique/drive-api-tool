@@ -277,6 +277,7 @@ async def get_metadata_recursive(
     follow_shortcuts=True,
     follow_parents=False,
     restore=None,
+    indent=None,
 ):
     """Recursively fetch the metadata of a group of IDs."""
 
@@ -349,7 +350,7 @@ async def get_metadata_recursive(
     metadata_queue = []
     hierarchy_queue = []
 
-    err_track = ErrorTracker()
+    err_track = ErrorTracker(indent)
 
     pbar_total = len(ids_queue)
     pbar = tqdm(desc="Fetch metadata", total=pbar_total, unit="req")
@@ -679,6 +680,7 @@ async def main(ids, aiogoogle, drive, args):
         args.follow_shortcuts,
         args.follow_parents,
         args.restore,
+        args.indent,
     )
 
     await download_and_save(

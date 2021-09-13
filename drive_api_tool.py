@@ -85,7 +85,6 @@ if __name__ == "__main__":
 
 
 import asyncio
-from datetime import datetime
 import json
 import os
 import pickle
@@ -98,7 +97,7 @@ from tqdm import tqdm
 
 import dl
 from rate_limit import rate_limited_as_completed
-from util import ErrorTracker, sanitize_filename
+from util import ErrorTracker
 
 # See all scopes at: https://developers.google.com/drive/api/v3/about-auth#OAuth2Scope
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -144,7 +143,7 @@ def get_creds(credentials_file, token_file, host, port):
 
 async def get_metadata(aiogoogle, drive, ids, fields, max_concurrent, quota):
     metadata = []
-    err_track = ErrorTracker()
+    err_track = ErrorTracker(args.indent)
     pbar = tqdm(total=len(ids), unit="req")
     coros = [aiogoogle.as_user(drive.files.get(fileId=id, fields=fields)) for id in ids]
     # coros = [aiogoogle.as_user(drive.files.get(fileId=id, download_file="test-path.data", alt="media", validate=False)) for id in ids]
@@ -181,28 +180,7 @@ async def main(args):
                     indent=args.indent,
                 )
 
-    print("Error summary:")
-    if err_track.counts:
-        for code, count in err_track.counts.items():
-            print(f"  {code}: {count}")
-
-        # Not UTC or ISO 8601, but it's readable and filename-safe
-        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        error_filename = "drive_errors_"
-        # TODO forbidden blah
-        error_filename += sanitize_filename(
-            args.input, len(error_filename) + 1 + len(now) + 5, None
-        )
-        error_filename += "_" + now + ".json"
-        with open(error_filename, "w") as f:
-            json.dump(
-                {"errors": err_track.errors},
-                f,
-                indent=args.indent,
-            )
-        print(f"Errors written to: {error_filename}")
-    else:
-        print("  No errors.")
+    err_track.print_errors()
 
 
 if __name__ == "__main__":
