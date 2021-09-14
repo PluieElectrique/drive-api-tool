@@ -567,7 +567,11 @@ async def download_and_save(
 
     ids = get_ids()
 
-    pbar = tqdm(desc="Create folders, dump metadata", total=len(ids), unit="file")
+    pbar = tqdm(
+        desc="Create folders, dump metadata, download files",
+        total=len(ids),
+        unit="item",
+    )
 
     async def create_folders_dump_metadata(path, item):
         global things_to_download
