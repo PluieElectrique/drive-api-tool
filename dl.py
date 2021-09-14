@@ -663,7 +663,7 @@ async def main(ids, aiogoogle, drive, args):
     # XXX Very hacky way to increase chunk size
     import aiogoogle.models as aiogoogle_models
 
-    aiogoogle_models.DEFAULT_DOWNLOAD_CHUNK_SIZE = 5 * 1024 * 1024
+    aiogoogle_models.DEFAULT_DOWNLOAD_CHUNK_SIZE = 10 * 1024 * 1024
 
     os.makedirs(args.output, exist_ok=True)
 
