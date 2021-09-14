@@ -25,6 +25,12 @@ if __name__ == "__main__":
         help="Path to DB for restoring from failed metadata fetch",
     )
     parser.add_argument(
+        "--restore-download",
+        default=None,
+        type=str,
+        help="Path to DB for restoring and only downloading",
+    )
+    parser.add_argument(
         "--fields",
         default=None,
         type=str,
@@ -44,7 +50,14 @@ if __name__ == "__main__":
         metavar="N",
         default=100,
         type=int,
-        help="(default: %(default)s) Max concurrent queries",
+        help="(default: %(default)s) Max concurrent queries for getting metadata",
+    )
+    parser.add_argument(
+        "--download-concurrent",
+        metavar="N",
+        default=25,
+        type=int,
+        help="(default: %(default)s) Max concurrent queries for downloading files",
     )
     parser.add_argument(
         "--indent",

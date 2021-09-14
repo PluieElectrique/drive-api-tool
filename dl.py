@@ -613,7 +613,7 @@ async def download_and_save(
                         )
                     )
 
-                if len(things_to_download) > 25:
+                if len(things_to_download) > max_concurrent:
                     for coro in rate_limited_as_completed(
                         things_to_download, max_concurrent, quota
                     ):
@@ -659,30 +659,44 @@ async def main(ids, aiogoogle, drive, args):
     aiogoogle_models.DEFAULT_DOWNLOAD_CHUNK_SIZE = 5 * 1024 * 1024
 
     os.makedirs(args.output, exist_ok=True)
-    err_track, db_name = await get_metadata_recursive(
-        ids,
-        aiogoogle,
-        drive,
-        args.fields,
-        args.concurrent,
-        args.quota,
-        args.output,
-        args.follow_shortcuts,
-        args.follow_parents,
-        args.restore,
-        args.indent,
-    )
 
-    await download_and_save(
-        db_name,
-        args.output,
-        aiogoogle,
-        drive,
-        args.concurrent,
-        args.quota,
-        None,
-        args.indent,
-        None,
-    )
+    if args.restore_download is None:
+        err_track, db_name = await get_metadata_recursive(
+            ids,
+            aiogoogle,
+            drive,
+            args.fields,
+            args.concurrent,
+            args.quota,
+            args.output,
+            args.follow_shortcuts,
+            args.follow_parents,
+            args.restore,
+            args.indent,
+        )
+
+        await download_and_save(
+            db_name,
+            args.output,
+            aiogoogle,
+            drive,
+            args.concurrent,
+            args.quota,
+            None,
+            args.indent,
+            None,
+        )
+    else:
+        await download_and_save(
+            args.restore_download,
+            args.output,
+            aiogoogle,
+            drive,
+            args.download_concurrent,
+            args.quota,
+            None,
+            args.indent,
+            None,
+        )
 
     return err_track
