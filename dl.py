@@ -622,7 +622,8 @@ async def download_and_save(
                     else:
                         pbar.update(1)
 
-                if len(things_to_download) > max_concurrent:
+                # we need to queue up a ton at once to minimize the effect of a giant file blocking everything else
+                if len(things_to_download) > max_concurrent * 100:
                     for coro in rate_limited_as_completed(
                         things_to_download, max_concurrent, quota
                     ):
