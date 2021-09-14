@@ -610,8 +610,8 @@ async def download_and_save(
                     pbar.total += len(mimes_to_export) - 1
                 else:
                     if (
-                        not os.path.exists(item_path)
-                        or os.path.getsize(item_path) != item["size"]
+                        (not os.path.exists(item_path))
+                        or os.path.getsize(item_path) != int(item["size"])
                     ):
                         things_to_download.append(
                             aiogoogle.as_user(
