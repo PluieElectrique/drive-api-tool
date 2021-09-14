@@ -1,27 +1,14 @@
-WORKSPACE_EXPORT = {
-    "application/vnd.google-apps.document": [
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ],
-    "application/vnd.google-apps.spreadsheet": [
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    ],
-    "application/vnd.google-apps.drawing": ["image/png"],
-    "application/vnd.google-apps.presentation": [
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    ],
-    "application/vnd.google-apps.script": ["application/vnd.google-apps.script+json"],
-}
-
-
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import os
 import sqlite3
+import traceback
 import zlib
 
 from tqdm import tqdm
 
+from export_config import WORKSPACE_EXPORT
 from rate_limit import rate_limited_as_completed
 from util import ErrorTracker, sanitize_filename
 
@@ -635,6 +622,7 @@ async def download_and_save(
 
         except Exception as exc:
             print(f"Failed to process item: {item=}, {path=}: {exc}")
+            print(traceback.format_exc())
             # raise exc
 
     for id in ids:
@@ -651,6 +639,7 @@ async def download_and_save(
                 del item.metadata
             except Exception as exc:
                 print(f"Failed to process item: {item=}: {exc}")
+                print(traceback.format_exc())
                 # raise exc
 
     if things_to_download:
