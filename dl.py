@@ -530,6 +530,7 @@ def try_mkdir(path):
 things_to_download = []
 # TODO just pass args?
 async def download_and_save(
+    err_track,
     db_name,
     out_dir,
     aiogoogle,
@@ -617,7 +618,7 @@ async def download_and_save(
                     for coro in rate_limited_as_completed(
                         things_to_download, max_concurrent, quota
                     ):
-                        res = await coro
+                        res = await err_track(coro)
                     things_to_download = []
 
         except Exception as exc:
@@ -676,6 +677,7 @@ async def main(ids, aiogoogle, drive, args):
         )
 
         await download_and_save(
+            err_track,
             db_name,
             args.output,
             aiogoogle,
@@ -687,7 +689,9 @@ async def main(ids, aiogoogle, drive, args):
             None,
         )
     else:
+        err_track = ErrorTracker(args.indent)
         await download_and_save(
+            err_track,
             args.restore_download,
             args.output,
             aiogoogle,
