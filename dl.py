@@ -340,7 +340,7 @@ async def get_metadata_recursive(
 
     err_track = ErrorTracker(indent)
 
-    pbar_total = len(ids_queue)
+    pbar_total = len(ids_queue) + len(folders_queue)
     pbar = tqdm(desc="Fetch metadata", total=pbar_total, unit="req")
 
     def queue_parent_folder_shortcut(res):
