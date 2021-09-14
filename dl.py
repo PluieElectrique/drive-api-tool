@@ -275,7 +275,7 @@ async def get_metadata_recursive(
     # fields are left out.
     if fields != "*":
         fields = "" if fields is None else fields + ","
-        fields += "id,name,mimeType,owners(displayName,permissionId,emailAddress),version,fullFileExtension"
+        fields += "id,name,mimeType,owners(displayName,permissionId,emailAddress),version,fullFileExtension,size"
         if follow_shortcuts:
             fields += ",shortcutDetails"
         if follow_parents:
@@ -603,16 +603,22 @@ async def download_and_save(
                             )
                         )
                 else:
-                    things_to_download.append(
-                        aiogoogle.as_user(
-                            drive.files.get(
-                                fileId=item["id"],
-                                download_file=item_path,
-                                alt="media",
-                                validate=False,
+                    if (
+                        not os.path.exists(item_path)
+                        or os.path.getsize(item_path) != item["size"]
+                    ):
+                        things_to_download.append(
+                            aiogoogle.as_user(
+                                drive.files.get(
+                                    fileId=item["id"],
+                                    download_file=item_path,
+                                    alt="media",
+                                    validate=False,
+                                )
                             )
                         )
-                    )
+                    else:
+                        pbar.update(1)
 
                 if len(things_to_download) > max_concurrent:
                     for coro in rate_limited_as_completed(
