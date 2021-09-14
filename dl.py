@@ -576,10 +576,9 @@ async def download_and_save(
             with open(item_path + ".json", "w") as f:
                 json.dump(item.metadata, f, indent=indent)
 
-            pbar.update(1)
-
             if item.is_folder():
                 try_mkdir(item_path)
+                pbar.update(1)
                 for child_id in item.children:
                     child = Item()
                     child.metadata = load_metadata(child_id)
@@ -589,7 +588,8 @@ async def download_and_save(
                 del item.children
             else:
                 if item.is_workspace_doc():
-                    for mime in WORKSPACE_EXPORT[item["mimeType"]]:
+                    mimes_to_export = WORKSPACE_EXPORT[item["mimeType"]]
+                    for mime in mimes_to_export:
                         ext = WORKSPACE_EXPORT_MIME_EXTENSION[mime]
                         things_to_download.append(
                             aiogoogle.as_user(
@@ -602,6 +602,8 @@ async def download_and_save(
                                 )
                             )
                         )
+
+                    pbar.total += len(mimes_to_export) - 1
                 else:
                     if (
                         not os.path.exists(item_path)
@@ -625,6 +627,7 @@ async def download_and_save(
                         things_to_download, max_concurrent, quota
                     ):
                         res = await err_track(coro)
+                        pbar.update(1)
                     things_to_download = []
 
         except Exception as exc:
