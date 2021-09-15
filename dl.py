@@ -620,15 +620,16 @@ async def download_and_save(
 
                     pbar.total += len(mimes_to_export) - 1
                 else:
-                    if (
-                        (not os.path.exists(item_path))
-                        or os.path.getsize(item_path) != int(item["size"])
-                    ):
+                    item_size = int(item["size"])
+                    if (not os.path.exists(item_path)) or os.path.getsize(
+                        item_path
+                    ) != item_size:
                         things_to_download.append(
                             aiogoogle.as_user(
                                 drive.files.get(
                                     fileId=item["id"],
                                     download_file=item_path,
+                                    download_file_size=item_size,
                                     alt="media",
                                     validate=False,
                                 )
