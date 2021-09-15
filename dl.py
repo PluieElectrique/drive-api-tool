@@ -561,9 +561,20 @@ async def download_and_save(
         c = metadata_c.execute(f"SELECT 1 FROM hierarchy WHERE child_id = '{id}'")
         return c.fetchone() is not None
 
-    def get_ids():
-        c = metadata_c.execute("SELECT id FROM metadata")
-        return [e[0] for e in c.fetchall()]
+    def get_ids(BATCH_SIZE=50000):
+        ids = []
+        metadata_c.execute("SELECT COUNT(*) FROM metadata")
+        id_total = metadata_c.fetchone()[0]
+        pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
+        for offset in range(0, id_total, BATCH_SIZE):
+            metadata_c.execute(
+                f"SELECT id FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
+            )
+            old_len = len(ids)
+            ids.extend(e[0] for e in metadata_c.fetchall())
+            pbar.update(len(ids) - old_len)
+        pbar.close()
+        return ids
 
     ids = get_ids()
 
