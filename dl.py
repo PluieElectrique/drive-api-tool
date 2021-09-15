@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
+import logging
 import os
 import sqlite3
 import traceback
@@ -11,6 +12,12 @@ from tqdm import tqdm
 from export_config import WORKSPACE_EXPORT
 from rate_limit import rate_limited_as_completed
 from util import ErrorTracker, sanitize_filename
+
+now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+logger_filename = f"drive_dl_errors_{now}.log"
+print(f"Logging errors to {logger_filename}")
+logging.basicConfig(filename=logger_filename)
+logger = logging.getLogger(__name__)
 
 # Number of results to return per folder contents request (`files.list`). Must
 # be between 1 and 1000, inclusive. I assume that the biggest page size means
@@ -338,7 +345,7 @@ async def get_metadata_recursive(
     metadata_queue = []
     hierarchy_queue = []
 
-    err_track = ErrorTracker(indent)
+    err_track = ErrorTracker(logger, indent)
 
     pbar_total = len(ids_queue) + len(folders_queue)
     pbar = tqdm(desc="Fetch metadata", total=pbar_total, unit="req")
@@ -648,8 +655,8 @@ async def download_and_save(
                     things_to_download = []
 
         except Exception as exc:
-            print(f"Failed to process item: {item=}, {path=}: {exc}")
-            print(traceback.format_exc())
+            logger.error(f"Failed to process item: {item=}, {path=}: {exc}")
+            logger.error(traceback.format_exc())
             # raise exc
 
     for id in ids:
@@ -665,8 +672,8 @@ async def download_and_save(
                     await create_folders_dump_metadata(path, item)
                 del item.metadata
             except Exception as exc:
-                print(f"Failed to process item: {item=}: {exc}")
-                print(traceback.format_exc())
+                logger.error(f"Failed to process item: {item=}: {exc}")
+                logger.error(traceback.format_exc())
                 # raise exc
 
     if things_to_download:
@@ -715,7 +722,7 @@ async def main(ids, aiogoogle, drive, args):
             None,
         )
     else:
-        err_track = ErrorTracker(args.indent)
+        err_track = ErrorTracker(logger, args.indent)
         await download_and_save(
             err_track,
             args.restore_download,
