@@ -591,23 +591,27 @@ async def download_and_save(
         unit="item",
     )
 
-    async def create_folders_dump_metadata(path, item):
+    async def create_folders_dump_metadata(path, item, id_set):
         global things_to_download
         try:
             item_path = os.path.join(path, item.filename())
-            with open(item_path + ".json", "w") as f:
-                json.dump(item.metadata, f, indent=indent)
+            item_id = item["id"]
+            if item_id in id_set:
+                logger.warning(f"Loop detected: {item_id}, {item_path}")
+                return
 
             if item.is_folder():
+                id_set.add(item_id)
                 try_mkdir(item_path)
                 pbar.update(1)
                 for child_id in item.children:
                     child = Item()
                     child.metadata = load_metadata(child_id)
                     child.children = load_children(child_id)
-                    await create_folders_dump_metadata(item_path, child)
+                    await create_folders_dump_metadata(item_path, child, id_set)
                     del child.metadata
                 del item.children
+                id_set.remove(item_id)
             else:
                 if item.is_workspace_doc():
                     mimes_to_export = WORKSPACE_EXPORT[item["mimeType"]]
@@ -645,14 +649,17 @@ async def download_and_save(
                     else:
                         pbar.update(1)
 
-                # we need to queue up a ton at once to minimize the effect of a giant file blocking everything else
-                if len(things_to_download) > max_concurrent * 100:
-                    for coro in rate_limited_as_completed(
-                        things_to_download, max_concurrent, quota
-                    ):
-                        res = await err_track(coro)
-                        pbar.update(1)
-                    things_to_download = []
+            with open(item_path + ".json", "w") as f:
+                json.dump(item.metadata, f, indent=indent)
+
+            # we need to queue up a ton at once to minimize the effect of a giant file blocking everything else
+            if len(things_to_download) > max_concurrent * 100:
+                for coro in rate_limited_as_completed(
+                    things_to_download, max_concurrent, quota
+                ):
+                    res = await err_track(coro)
+                    pbar.update(1)
+                things_to_download = []
 
         except Exception as exc:
             logger.error(f"Failed to process item: {item=}, {path=}: {exc}")
@@ -668,7 +675,7 @@ async def download_and_save(
                 for owner_foldername in item.owner_foldernames():
                     path = os.path.join(out_dir, owner_foldername)
                     try_mkdir(path)
-                    await create_folders_dump_metadata(path, item)
+                    await create_folders_dump_metadata(path, item, set())
                 del item.metadata
             except Exception as exc:
                 logger.error(f"Failed to process item: {item=}: {exc}")
