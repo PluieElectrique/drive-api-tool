@@ -302,8 +302,6 @@ async def get_metadata_recursive(
     # page tokens.
     folders_continue = []
 
-    # items = defaultdict(Item)
-
     if restore is None:
         ids_queue = set(initial_ids)
         ids_seen = set()
@@ -466,10 +464,7 @@ async def get_metadata_recursive(
                     #    )
                     #    # continue
 
-                    # items[id].children.append(child_id)
                     hierarchy_queue.append((id, child_id))
-                    # items[child_id].is_child = True
-                    # items[child_id].metadata = child
                     metadata_queue.append(
                         (child_id, zlib.compress(json.dumps(child).encode()))
                     )
@@ -495,9 +490,6 @@ async def get_metadata_recursive(
                 if not res:
                     continue
 
-                # items[res["id"]].metadata = res
-                # BLAH WE STILL NEED THIS
-                # items[res["id"]].metadata = None
                 metadata_queue.append(
                     (res["id"], zlib.compress(json.dumps(res).encode()))
                 )
