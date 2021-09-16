@@ -657,7 +657,6 @@ async def download_and_save(
         except Exception as exc:
             logger.error(f"Failed to process item: {item=}, {path=}: {exc}")
             logger.error(traceback.format_exc())
-            # raise exc
 
     for id in ids:
         item = Item()
@@ -674,7 +673,6 @@ async def download_and_save(
             except Exception as exc:
                 logger.error(f"Failed to process item: {item=}: {exc}")
                 logger.error(traceback.format_exc())
-                # raise exc
 
     if things_to_download:
         for coro in rate_limited_as_completed(
