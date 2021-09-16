@@ -680,7 +680,8 @@ async def download_and_save(
         for coro in rate_limited_as_completed(
             things_to_download, max_concurrent, quota
         ):
-            res = await coro
+            res = await err_track(coro)
+            pbar.update(1)
         things_to_download = []
     metadata_conn.close()
     pbar.close()
