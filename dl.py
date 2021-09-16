@@ -568,29 +568,6 @@ async def download_and_save(
         c = metadata_c.execute(f"SELECT 1 FROM hierarchy WHERE child_id = '{id}'")
         return c.fetchone() is not None
 
-    def get_ids(BATCH_SIZE=50000):
-        ids = []
-        metadata_c.execute("SELECT COUNT(*) FROM metadata")
-        id_total = metadata_c.fetchone()[0]
-        pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
-        for offset in range(0, id_total, BATCH_SIZE):
-            metadata_c.execute(
-                f"SELECT id FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
-            )
-            old_len = len(ids)
-            ids.extend(e[0] for e in metadata_c.fetchall())
-            pbar.update(len(ids) - old_len)
-        pbar.close()
-        return ids
-
-    ids = get_ids()
-
-    pbar = tqdm(
-        desc="Create folders, dump metadata, download files",
-        total=len(ids),
-        unit="item",
-    )
-
     async def create_folders_dump_metadata(path, item, id_set):
         global things_to_download
         try:
@@ -603,7 +580,7 @@ async def download_and_save(
             if item.is_folder():
                 id_set.add(item_id)
                 try_mkdir(item_path)
-                pbar.update(1)
+                download_pbar.update(1)
                 for child_id in item.children:
                     child = Item()
                     child.metadata = load_metadata(child_id)
@@ -629,7 +606,7 @@ async def download_and_save(
                             )
                         )
 
-                    pbar.total += len(mimes_to_export) - 1
+                    download_pbar.total += len(mimes_to_export) - 1
                 else:
                     item_size = int(item["size"])
                     if (not os.path.exists(item_path)) or os.path.getsize(
@@ -647,7 +624,7 @@ async def download_and_save(
                             )
                         )
                     else:
-                        pbar.update(1)
+                        download_pbar.update(1)
 
             with open(item_path + ".json", "w") as f:
                 json.dump(item.metadata, f, indent=indent)
@@ -658,38 +635,59 @@ async def download_and_save(
                     things_to_download, max_concurrent, quota
                 ):
                     res = await err_track(coro)
-                    pbar.update(1)
+                    download_pbar.update(1)
                 things_to_download = []
 
         except Exception as exc:
             logger.error(f"Failed to process item: {item=}, {path=}: {exc}")
             logger.error(traceback.format_exc())
 
-    for id in ids:
-        item = Item()
-        item.is_child = is_child(id)
-        item.children = load_children(id)
-        if not item.is_child:
-            try:
-                item.metadata = load_metadata(id)
-                for owner_foldername in item.owner_foldernames():
-                    path = os.path.join(out_dir, owner_foldername)
-                    try_mkdir(path)
-                    await create_folders_dump_metadata(path, item, set())
-                del item.metadata
-            except Exception as exc:
-                logger.error(f"Failed to process item: {item=}: {exc}")
-                logger.error(traceback.format_exc())
+    # GET IDS INCREMENTALLY AND FETCH
+    BATCH_SIZE = 50000
+    metadata_c.execute("SELECT COUNT(*) FROM metadata")
+    id_total = metadata_c.fetchone()[0]
+    id_pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
+    download_pbar = tqdm(
+        total=id_total,
+        desc="Create folders, dump metadata, download files",
+        unit="item",
+    )
+
+    for offset in range(0, id_total, BATCH_SIZE):
+        metadata_c.execute(
+            f"SELECT id FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
+        )
+        ids = list(e[0] for e in metadata_c.fetchall())
+        id_pbar.update(len(ids))
+
+        # ACTUALLY FETCH
+        for id in ids:
+            item = Item()
+            item.is_child = is_child(id)
+            item.children = load_children(id)
+            if not item.is_child:
+                try:
+                    item.metadata = load_metadata(id)
+                    for owner_foldername in item.owner_foldernames():
+                        path = os.path.join(out_dir, owner_foldername)
+                        try_mkdir(path)
+                        await create_folders_dump_metadata(path, item, set())
+                    del item.metadata
+                except Exception as exc:
+                    logger.error(f"Failed to process item: {item=}: {exc}")
+                    logger.error(traceback.format_exc())
+
+    id_pbar.close()
 
     if things_to_download:
         for coro in rate_limited_as_completed(
             things_to_download, max_concurrent, quota
         ):
             res = await err_track(coro)
-            pbar.update(1)
+            download_pbar.update(1)
         things_to_download = []
     metadata_conn.close()
-    pbar.close()
+    download_pbar.close()
 
 
 async def main(ids, aiogoogle, drive, args):
