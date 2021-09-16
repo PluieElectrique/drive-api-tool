@@ -546,8 +546,17 @@ async def download_and_save(
     metadata_conn = sqlite3.connect(db_name)
     metadata_c = metadata_conn.cursor()
 
+    now = datetime.now()
+    print("Creating child index if it doesn't exist. This may take a very long time!")
+    metadata_c.execute(
+        "CREATE INDEX IF NOT EXISTS hierarchy_child ON hierarchy (child_id)"
+    )
+    print(f"Done, took: {datetime.now() - now}")
+
     def load_metadata(id):
-        m = metadata_c.execute(f"SELECT metadata FROM metadata WHERE id = '{id}'")
+        m = metadata_c.execute(
+            f"SELECT metadata FROM metadata WHERE id = '{id}' LIMIT 1"
+        )
         return json.loads(zlib.decompress(m.fetchone()[0]))
 
     def load_children(id):
@@ -557,7 +566,9 @@ async def download_and_save(
         return [e[0] for e in c.fetchall()]
 
     def is_child(id):
-        c = metadata_c.execute(f"SELECT 1 FROM hierarchy WHERE child_id = '{id}'")
+        c = metadata_c.execute(
+            f"SELECT 1 FROM hierarchy WHERE child_id = '{id}' LIMIT 1"
+        )
         return c.fetchone() is not None
 
     async def create_folders_dump_metadata(path, item, id_set):
