@@ -560,7 +560,8 @@ async def download_and_save(
     )
 
     def add_suceeded(ids):
-        metadata_c.executemany("INSERT OR IGNORE downloaded VALUES (?)", ids)
+        ids = [(i,) for i in ids]
+        metadata_c.executemany("INSERT OR IGNORE INTO downloaded VALUES (?)", ids)
         metadata_conn.commit()
 
     def is_suceeded(id):
@@ -657,9 +658,9 @@ async def download_and_save(
             with open(item_path + ".json", "w") as f:
                 json.dump(item.metadata, f, indent=indent)
 
-            suceeeded = []
             # we need to queue up a ton at once to minimize the effect of a giant file blocking everything else
             if len(things_to_download) > max_concurrent * 100:
+                suceeeded = []
                 for coro in rate_limited_as_completed(
                     things_to_download, max_concurrent, quota
                 ):
@@ -668,7 +669,8 @@ async def download_and_save(
                         suceeeded.append(res[0])
                     download_pbar.update(1)
                 things_to_download = []
-            add_suceeded(suceeeded)
+                if suceeeded:
+                    add_suceeded(suceeeded)
 
         except Exception as exc:
             logger.error(f"Failed to process item: {item=}, {path=}: {exc}")
@@ -720,7 +722,8 @@ async def download_and_save(
             if isinstance(res, tuple):
                 suceeeded.append(res[0])
             download_pbar.update(1)
-        add_suceeded(suceeeded)
+        if suceeeded:
+            add_suceeded(suceeeded)
         things_to_download = []
     metadata_conn.close()
     download_pbar.close()
@@ -755,7 +758,7 @@ async def main(ids, aiogoogle, drive, args):
             args.output,
             aiogoogle,
             drive,
-            args.concurrent,
+            args.download_concurrent,
             args.quota,
             None,
             args.indent,
