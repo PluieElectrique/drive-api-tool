@@ -102,7 +102,7 @@ class Item:
         elif self.is_workspace_doc():
             suffix = f"_{id}_{version}"
             reserved_space += WORKSPACE_EXPORT_MIME_EXTENSION_MAX_LEN
-        elif extension is not None and name.endswith(extension):
+        elif extension is not None and extension != "" and name.endswith(extension):
             # The .endswith check is because the "fullFileExtension" field "is
             # not cleared if the new name does not contain a valid extension."
             # (https://developers.google.com/drive/api/v3/reference/files)
