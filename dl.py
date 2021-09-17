@@ -553,6 +553,20 @@ async def download_and_save(
     )
     print(f"Done, took: {datetime.now() - now}")
 
+    metadata_c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS downloaded (id TEXT PRIMARY KEY NOT NULL)
+    """
+    )
+
+    def add_suceeded(ids):
+        metadata_c.executemany("INSERT OR IGNORE downloaded VALUES (?)", ids)
+        metadata_conn.commit()
+
+    def is_suceeded(id):
+        c = metadata_c.execute(f"SELECT 1 FROM downloaded WHERE id = '{id}' LIMIT 1")
+        return c.fetchone() is not None
+
     def load_metadata(id):
         m = metadata_c.execute(
             f"SELECT metadata FROM metadata WHERE id = '{id}' LIMIT 1"
@@ -570,6 +584,9 @@ async def download_and_save(
             f"SELECT 1 FROM hierarchy WHERE child_id = '{id}' LIMIT 1"
         )
         return c.fetchone() is not None
+
+    async def wrap_coro(id, coro):
+        return id, await coro
 
     async def create_folders_dump_metadata(path, item, id_set):
         global things_to_download
@@ -592,20 +609,25 @@ async def download_and_save(
                     del child.metadata
                 del item.children
                 id_set.remove(item_id)
+            elif is_suceeded(item_id):
+                download_pbar.update(1)
             else:
                 if item.is_workspace_doc():
                     mimes_to_export = WORKSPACE_EXPORT[item["mimeType"]]
                     for mime in mimes_to_export:
                         ext = WORKSPACE_EXPORT_MIME_EXTENSION[mime]
                         things_to_download.append(
-                            aiogoogle.as_user(
-                                drive.files.export(
-                                    fileId=item["id"],
-                                    mimeType=mime,
-                                    download_file=item_path + ext,
-                                    alt="media",
-                                    validate=False,
-                                )
+                            wrap_coro(
+                                item["id"],
+                                aiogoogle.as_user(
+                                    drive.files.export(
+                                        fileId=item["id"],
+                                        mimeType=mime,
+                                        download_file=item_path + ext,
+                                        alt="media",
+                                        validate=False,
+                                    )
+                                ),
                             )
                         )
 
@@ -616,14 +638,17 @@ async def download_and_save(
                         item_path
                     ) != item_size:
                         things_to_download.append(
-                            aiogoogle.as_user(
-                                drive.files.get(
-                                    fileId=item["id"],
-                                    download_file=item_path,
-                                    download_file_size=item_size,
-                                    alt="media",
-                                    validate=False,
-                                )
+                            wrap_coro(
+                                item["id"],
+                                aiogoogle.as_user(
+                                    drive.files.get(
+                                        fileId=item["id"],
+                                        download_file=item_path,
+                                        download_file_size=item_size,
+                                        alt="media",
+                                        validate=False,
+                                    )
+                                ),
                             )
                         )
                     else:
@@ -632,14 +657,18 @@ async def download_and_save(
             with open(item_path + ".json", "w") as f:
                 json.dump(item.metadata, f, indent=indent)
 
+            suceeeded = []
             # we need to queue up a ton at once to minimize the effect of a giant file blocking everything else
             if len(things_to_download) > max_concurrent * 100:
                 for coro in rate_limited_as_completed(
                     things_to_download, max_concurrent, quota
                 ):
                     res = await err_track(coro)
+                    if isinstance(res, tuple):
+                        suceeeded.append(res[0])
                     download_pbar.update(1)
                 things_to_download = []
+            add_suceeded(suceeeded)
 
         except Exception as exc:
             logger.error(f"Failed to process item: {item=}, {path=}: {exc}")
@@ -683,11 +712,15 @@ async def download_and_save(
     id_pbar.close()
 
     if things_to_download:
+        suceeeded = []
         for coro in rate_limited_as_completed(
             things_to_download, max_concurrent, quota
         ):
             res = await err_track(coro)
+            if isinstance(res, tuple):
+                suceeeded.append(res[0])
             download_pbar.update(1)
+        add_suceeded(suceeeded)
         things_to_download = []
     metadata_conn.close()
     download_pbar.close()
