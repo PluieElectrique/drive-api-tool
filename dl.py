@@ -567,6 +567,10 @@ async def download_and_save(
         metadata_c.executemany("INSERT OR IGNORE INTO downloaded VALUES (?)", ids)
         metadata_conn.commit()
 
+    def clear_suceeded(id):
+        metadata_c.execute(f"DELETE FROM downloaded WHERE id = '{id}'")
+        metadata_conn.commit()
+
     def is_suceeded(id):
         c = metadata_c.execute(f"SELECT 1 FROM downloaded WHERE id = '{id}' LIMIT 1")
         return c.fetchone() is not None
@@ -613,8 +617,6 @@ async def download_and_save(
                     del child.metadata
                 del item.children
                 id_set.remove(item_id)
-            elif is_suceeded(item_id):
-                download_pbar.update(1)
             else:
                 if "resourceKey" in item:
                     resource_key = item["resourceKey"]
@@ -630,40 +632,55 @@ async def download_and_save(
                 else:
                     id_resource_key = None
 
+                did_succeed = is_suceeded(item_id)
+
                 if item.is_workspace_doc():
                     mimes_to_export = WORKSPACE_EXPORT[item["mimeType"]]
+                    download_pbar.total += len(mimes_to_export) - 1
+
                     for mime in mimes_to_export:
                         ext = WORKSPACE_EXPORT_MIME_EXTENSION[mime]
-                        things_to_download.append(
-                            wrap_coro(
-                                item["id"],
-                                aiogoogle.as_user(
-                                    drive.files.export(
-                                        fileId=item["id"],
-                                        mimeType=mime,
-                                        download_file=item_path + ext,
-                                        download_file_id_resource_key=id_resource_key,
-                                        alt="media",
-                                        validate=False,
-                                    )
-                                ),
+                        # XXX: We only track 1 success for each ID, so if some
+                        # export succeeded but others failed, the failed ones
+                        # won't be retried
+                        if (not os.path.exists(item_path + ext)) or (not did_succeed):
+                            # XXX: Clears all of them which honestly doesn't do
+                            # much from the problem above. If at least 1
+                            # succeeds, they'll all "succeed"
+                            if did_succeed:
+                                clear_suceeded(item_id)
+                                did_succeed = False
+                            things_to_download.append(
+                                wrap_coro(
+                                    item_id,
+                                    aiogoogle.as_user(
+                                        drive.files.export(
+                                            fileId=item_id,
+                                            mimeType=mime,
+                                            download_file=item_path + ext,
+                                            download_file_id_resource_key=id_resource_key,
+                                            alt="media",
+                                            validate=False,
+                                        )
+                                    ),
+                                )
                             )
-                        )
-
-                    download_pbar.total += len(mimes_to_export) - 1
+                        else:
+                            download_pbar.update(1)
                 else:
-                    item_size = int(item["size"])
-                    if (not os.path.exists(item_path)) or os.path.getsize(
-                        item_path
-                    ) != item_size:
+                    # We don't check the size because the file could have
+                    # changed after the initial metadata fetch
+                    if (not os.path.exists(item_path)) or (not did_succeed):
+                        if did_succeed:
+                            clear_suceeded(item_id)
                         things_to_download.append(
                             wrap_coro(
-                                item["id"],
+                                item_id,
                                 aiogoogle.as_user(
                                     drive.files.get(
-                                        fileId=item["id"],
+                                        fileId=item_id,
                                         download_file=item_path,
-                                        download_file_size=item_size,
+                                        download_file_size=int(item["size"]),
                                         download_file_id_resource_key=id_resource_key,
                                         alt="media",
                                         validate=False,
