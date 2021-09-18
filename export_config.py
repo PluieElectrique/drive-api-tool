@@ -11,3 +11,9 @@ WORKSPACE_EXPORT = {
     ],
     "application/vnd.google-apps.script": ["application/vnd.google-apps.script+json"],
 }
+
+# Set of owner emails to ignore
+OWNER_BLACKLIST = set(
+    # "example1@example.com",
+    # "example2@example.com",
+)

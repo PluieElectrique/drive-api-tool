@@ -9,7 +9,7 @@ import zlib
 
 from tqdm import tqdm
 
-from export_config import WORKSPACE_EXPORT
+from export_config import WORKSPACE_EXPORT, OWNER_BLACKLIST
 from rate_limit import rate_limited_as_completed
 from util import ErrorTracker, sanitize_filename
 
@@ -599,6 +599,10 @@ async def download_and_save(
     async def create_folders_dump_metadata(path, item, id_set):
         global things_to_download
         try:
+            for owner in item["owners"]:
+                if "emailAddress" in owner and owner["emailAddress"] in OWNER_BLACKLIST:
+                    return
+
             item_path = os.path.join(path, item.filename())
             item_id = item["id"]
             if item_id in id_set:
