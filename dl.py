@@ -66,6 +66,9 @@ class Item:
     is_child: bool = False
     children: list = field(default_factory=list)
 
+    def __contains__(self, key):
+        return key in self.metadata
+
     def __getitem__(self, key):
         return self.metadata[key]
 
@@ -613,6 +616,20 @@ async def download_and_save(
             elif is_suceeded(item_id):
                 download_pbar.update(1)
             else:
+                if "resourceKey" in item:
+                    resource_key = item["resourceKey"]
+                    id_resource_key = f"{item_id}/{resource_key}"
+                elif (
+                    item["mimeType"] == "application/vnd.google-apps.shortcut"
+                    and "shortcutDetails" in item
+                    and "targetResourceKey" in item["shortcutDetails"]
+                ):
+                    # Can you even download a shortcut in the first place? Who knows
+                    resource_key = item["shortcutDetails"]["targetResourceKey"]
+                    id_resource_key = f"{item_id}/{resource_key}"
+                else:
+                    id_resource_key = None
+
                 if item.is_workspace_doc():
                     mimes_to_export = WORKSPACE_EXPORT[item["mimeType"]]
                     for mime in mimes_to_export:
@@ -625,6 +642,7 @@ async def download_and_save(
                                         fileId=item["id"],
                                         mimeType=mime,
                                         download_file=item_path + ext,
+                                        download_file_id_resource_key=id_resource_key,
                                         alt="media",
                                         validate=False,
                                     )
@@ -646,6 +664,7 @@ async def download_and_save(
                                         fileId=item["id"],
                                         download_file=item_path,
                                         download_file_size=item_size,
+                                        download_file_id_resource_key=id_resource_key,
                                         alt="media",
                                         validate=False,
                                     )
