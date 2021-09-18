@@ -282,7 +282,7 @@ async def get_metadata_recursive(
     # fields are left out.
     if fields != "*":
         fields = "" if fields is None else fields + ","
-        fields += "id,name,mimeType,owners(displayName,permissionId,emailAddress),version,fullFileExtension,size"
+        fields += "id,name,mimeType,owners(displayName,permissionId,emailAddress),version,fullFileExtension,size,resourceKey"
         if follow_shortcuts:
             fields += ",shortcutDetails"
         if follow_parents:
