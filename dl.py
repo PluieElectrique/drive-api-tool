@@ -674,8 +674,10 @@ async def download_and_save(
                     else:
                         download_pbar.update(1)
 
-            with open(item_path + ".json", "w") as f:
-                json.dump(item.metadata, f, indent=indent)
+            # Assume that we will never fail halfway through this operation
+            if not os.path.exists(item_path + ".json"):
+                with open(item_path + ".json", "w") as f:
+                    json.dump(item.metadata, f, indent=indent)
 
             # we need to queue up a ton at once to minimize the effect of a giant file blocking everything else
             if len(things_to_download) > max_concurrent * 100:
