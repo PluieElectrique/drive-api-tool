@@ -684,7 +684,9 @@ async def download_and_save(
                                     drive.files.get(
                                         fileId=item_id,
                                         download_file=item_path,
-                                        download_file_size=int(item["size"]),
+                                        download_file_size=int(item["size"])
+                                        if "size" in item
+                                        else None,
                                         download_file_id_resource_key=id_resource_key,
                                         alt="media",
                                         validate=False,
