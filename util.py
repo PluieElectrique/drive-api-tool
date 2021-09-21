@@ -85,16 +85,23 @@ class ErrorTracker:
             error = {"url": exc.req.url}
             if exc.res.json is not None and "error" in exc.res.json:
                 json_error = exc.res.json["error"]
-                error.update(
-                    {
-                        "code": json_error["code"],
-                        "message": json_error["message"],
-                    }
-                )
-                self.counts[error["code"]] += 1
-                self.total += 1
-                if self.total % 5000 == 0:
-                    self.print_errors()
+                if (
+                    isinstance(json_error, dict)
+                    and "code" in json_error
+                    and "message" in json_error
+                ):
+                    error.update(
+                        {
+                            "code": json_error["code"],
+                            "message": json_error["message"],
+                        }
+                    )
+                    self.counts[error["code"]] += 1
+                    self.total += 1
+                    if self.total % 5000 == 0:
+                        self.print_errors()
+                else:
+                    error["error"] = json_error
 
             self.errors.append(error)
         except Exception as exc:
