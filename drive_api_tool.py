@@ -31,6 +31,11 @@ if __name__ == "__main__":
         help="Path to DB for restoring and only downloading",
     )
     parser.add_argument(
+        "--only-0B",
+        action="store_true",
+        help="Only download files whose IDs start with '0B'",
+    )
+    parser.add_argument(
         "--fields",
         default=None,
         type=str,

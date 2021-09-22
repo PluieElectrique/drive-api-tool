@@ -541,6 +541,7 @@ async def download_and_save(
     quota,
     workspace_export_mime_types,
     indent,
+    only_0B,
     forbidden_sub=None,
 ):
     global things_to_download
@@ -636,9 +637,14 @@ async def download_and_save(
                 else:
                     id_resource_key = None
 
-                did_succeed = is_suceeded(item_id)
+                ignore_not_0B = only_0B and (not item_id.startswith("0B"))
 
-                if item.is_workspace_doc():
+                if not ignore_not_0B:
+                    did_succeed = is_suceeded(item_id)
+
+                if ignore_not_0B:
+                    download_pbar.update(1)
+                elif item.is_workspace_doc():
                     mimes_to_export = WORKSPACE_EXPORT[item["mimeType"]]
                     download_pbar.total += len(mimes_to_export) - 1
 
@@ -806,6 +812,7 @@ async def main(ids, aiogoogle, drive, args):
             args.quota,
             None,
             args.indent,
+            args.only_0B,
             None,
         )
     else:
@@ -820,6 +827,7 @@ async def main(ids, aiogoogle, drive, args):
             args.quota,
             None,
             args.indent,
+            args.only_0B,
             None,
         )
 
