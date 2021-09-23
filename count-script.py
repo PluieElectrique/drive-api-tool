@@ -56,10 +56,10 @@ class Recurse:
     def __init__(self, db):
         self.db = db
 
-        self.processed_item = 0
-        self.processed_item_0B = 0
-        self.skipped_item = 0
-        self.skipped_item_0B = 0
+        self.processed_id = set()
+        self.processed_id_0B = set()
+        self.skipped_id = set()
+        self.skipped_id_0B = set()
 
     def __enter__(self):
         id_total = self.db.total_ids()
@@ -70,14 +70,15 @@ class Recurse:
         self.pbar.close()
 
     def export(self):
+        processed_all = self.processed_id | self.processed_id_0B
         return (
-            self.processed_item,
-            self.processed_item_0B,
-            self.skipped_item,
-            self.skipped_item_0B,
+            len(self.processed_id),
+            len(self.processed_id_0B),
+            len(self.skipped_id - processed_all),
+            len(self.skipped_id_0B - processed_all),
         )
 
-    def recurse(self, metadata, children, is_0B, blacklist=False):
+    def recurse(self, id, metadata, children, blacklist=False):
         self.pbar.update(1)
 
         for owner in metadata["owners"]:
@@ -89,18 +90,22 @@ class Recurse:
                 break
 
         if blacklist:
-            self.skipped_item += 1
-            self.skipped_item_0B += is_0B
+            if id.startswith("0B"):
+                self.skipped_id_0B.add(id)
+            else:
+                self.skipped_id.add(id)
         else:
-            self.processed_item += 1
-            self.processed_item_0B += is_0B
+            if id.startswith("0B"):
+                self.processed_id_0B.add(id)
+            else:
+                self.processed_id.add(id)
 
         if metadata["mimeType"] == "application/vnd.google-apps.folder":
             for child_id in children:
                 self.recurse(
+                    child_id,
                     self.db.load_metadata(child_id),
                     self.db.load_children(child_id),
-                    child_id.startswith("0B"),
                     blacklist,
                 )
 
@@ -116,20 +121,18 @@ if __name__ == "__main__":
 
         for id in db.get_all_ids():
             if not db.is_child(id):
-                r.recurse(
-                    db.load_metadata(id), db.load_children(id), id.startswith("0B")
-                )
+                r.recurse(id, db.load_metadata(id), db.load_children(id))
 
-        processed_item, processed_item_0B, skipped_item, skipped_item_0B = r.export()
+        processed_id, processed_id_0B, skipped_id, skipped_id_0B = r.export()
 
     print()
     print("Total IDs")
     print("  Number of IDs       :", id_total)
     print("  Number of non-0B IDs:", id_total - id_total_0B)
     print("  Number of 0B IDs    :", id_total_0B)
-    print("Processed items")
-    print("  Number of items with non-0B IDs:", processed_item - processed_item_0B)
-    print("  Number of items with 0B IDs    :", processed_item_0B)
-    print("Blacklisted items")
-    print("  Number of items with non-0B IDs:", skipped_item - skipped_item_0B)
-    print("  Number of items with 0B IDs    :", skipped_item_0B)
+    print("Processed IDs")
+    print("  Number of non-0B IDs:", processed_id)
+    print("  Number of 0B IDs    :", processed_id_0B)
+    print("Blacklisted and not otherwise processed IDs")
+    print("  Number of non-0B IDs:", skipped_id)
+    print("  Number of 0B IDs    :", skipped_id_0B)
