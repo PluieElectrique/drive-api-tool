@@ -82,10 +82,7 @@ class Recurse:
         self.pbar.update(1)
 
         for owner in metadata["owners"]:
-            if (
-                "emailAddress" in metadata
-                and metadata["emailAddress"] in OWNER_BLACKLIST
-            ):
+            if "emailAddress" in owner and owner["emailAddress"] in OWNER_BLACKLIST:
                 blacklist = True
                 break
 
