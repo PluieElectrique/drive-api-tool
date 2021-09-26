@@ -44,12 +44,12 @@ class DB:
             """SELECT DISTINCT parent_id FROM hierarchy WHERE NOT EXISTS (
                  SELECT id FROM metadata WHERE id = parent_id)"""
         )
-        missing_parents = set(self.cur.fetchall())
+        missing_parents = set(e[0] for e in self.cur.fetchall())
         self.cur.execute(
             """SELECT DISTINCT child_id FROM hierarchy WHERE NOT EXISTS (
                  SELECT id FROM metadata WHERE id = child_id)"""
         )
-        missing_children = set(self.cur.fetchall())
+        missing_children = set(e[0] for e in self.cur.fetchall())
         return missing_parents, missing_children
 
     def load_metadata(self, id):
