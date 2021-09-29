@@ -303,7 +303,9 @@ def fix_restore_queues(db_name):
     conn.close()
 
     folders_queue = set()
-    folders_seen = folder_ids
+    # We put missing parents here because we don't want to fetch their contents
+    # Only their metadata
+    folders_seen = folder_ids | missing_parents
     ids_queue = missing_parents
     ids_seen = non_folder_ids | folder_ids
     return folders_queue, folders_seen, ids_queue, ids_seen
