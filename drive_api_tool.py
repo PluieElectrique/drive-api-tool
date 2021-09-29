@@ -25,6 +25,12 @@ if __name__ == "__main__":
         help="Path to DB for restoring from failed metadata fetch",
     )
     parser.add_argument(
+        "--fix-missing-parents",
+        default=None,
+        type=str,
+        help="Path to DB for fixing missing parents",
+    )
+    parser.add_argument(
         "--restore-download",
         default=None,
         type=str,

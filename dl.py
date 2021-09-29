@@ -264,6 +264,51 @@ def restore_queues(original_ids, db_name):
     return export_folders_queue, export_folders_seen, export_ids_queue, export_ids_seen
 
 
+# For some reason, we missed a bunch of IDs--they're in hierarchy but have no metadata.
+def fix_restore_queues(db_name):
+    # SETUP DB
+    conn = sqlite3.connect(db_name)
+    cur = conn.cursor()
+    BATCH_SIZE = 25000
+
+    # GET ID COUNT TOTAL
+    cur.execute("SELECT COUNT(*) FROM metadata")
+    id_total = cur.fetchone()[0]
+
+    # READ ENTIRE DB TO GET IDS AND FOLDER IDS
+    folder_ids = set()
+    non_folder_ids = set()
+    pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
+    for offset in range(0, id_total, BATCH_SIZE):
+        cur.execute(
+            f"SELECT id, metadata FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
+        )
+        for id, metadata in cur.fetchall():
+            metadata = json.loads(zlib.decompress(metadata))
+            if metadata["mimeType"] == "application/vnd.google-apps.folder":
+                folder_ids.add(id)
+            else:
+                non_folder_ids.add(id)
+            pbar.update(1)
+    pbar.close()
+
+    # GET MISSING PARENTS
+    cur.execute(
+        """SELECT DISTINCT parent_id FROM hierarchy WHERE NOT EXISTS (
+             SELECT id FROM metadata WHERE id = parent_id)"""
+    )
+    missing_parents = set(e[0] for e in cur.fetchall())
+
+    cur.close()
+    conn.close()
+
+    folders_queue = set()
+    folders_seen = folder_ids
+    ids_queue = missing_parents
+    ids_seen = non_folder_ids | folder_ids
+    return folders_queue, folders_seen, ids_queue, ids_seen
+
+
 async def get_metadata_recursive(
     initial_ids,
     aiogoogle,
@@ -275,6 +320,7 @@ async def get_metadata_recursive(
     follow_shortcuts=True,
     follow_parents=False,
     restore=None,
+    fix_missing_parents=None,
     indent=None,
 ):
     """Recursively fetch the metadata of a group of IDs."""
@@ -305,7 +351,17 @@ async def get_metadata_recursive(
     # page tokens.
     folders_continue = []
 
-    if restore is None:
+    if restore is not None:
+        metadata_db = restore
+        folders_queue, folders_seen, ids_queue, ids_seen = restore_queues(
+            initial_ids, metadata_db
+        )
+    elif fix_missing_parents is not None:
+        metadata_db = fix_missing_parents
+        folders_queue, folders_seen, ids_queue, ids_seen = fix_restore_queues(
+            metadata_db
+        )
+    else:
         ids_queue = set(initial_ids)
         ids_seen = set()
         folders_queue = set()
@@ -317,11 +373,6 @@ async def get_metadata_recursive(
                 out_dir, "drive_temp_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             )
             + ".db"
-        )
-    else:
-        metadata_db = restore
-        folders_queue, folders_seen, ids_queue, ids_seen = restore_queues(
-            initial_ids, metadata_db
         )
 
     metadata_conn = sqlite3.connect(metadata_db)
@@ -799,6 +850,7 @@ async def main(ids, aiogoogle, drive, args):
             args.follow_shortcuts,
             args.follow_parents,
             args.restore,
+            args.fix_missing_parents,
             args.indent,
         )
 
