@@ -167,7 +167,9 @@ def get_creds(credentials_file, token_file, host, port):
 
 async def get_metadata(aiogoogle, drive, ids, fields, max_concurrent, quota):
     metadata = []
-    err_track = ErrorTracker(args.indent)
+    # XXX: Should we really be using the logger from the dl module? Why is it
+    # defined there, anyway?
+    err_track = ErrorTracker(dl.logger, args.indent)
     pbar = tqdm(total=len(ids), unit="req")
     coros = [aiogoogle.as_user(drive.files.get(fileId=id, fields=fields)) for id in ids]
     # coros = [aiogoogle.as_user(drive.files.get(fileId=id, download_file="test-path.data", alt="media", validate=False)) for id in ids]
