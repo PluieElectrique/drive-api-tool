@@ -95,7 +95,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--token",
-        default="token.pickle",
+        default="token.json",
         help="(default: %(default)s) File to store access and refresh token in",
     )
     args = parser.parse_args()
@@ -111,11 +111,11 @@ if __name__ == "__main__":
 import asyncio
 import json
 import os
-import pickle
 
 from aiogoogle import Aiogoogle
 from aiogoogle.auth.creds import ClientCreds, UserCreds
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from tqdm import tqdm
 
@@ -133,8 +133,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 def get_creds(credentials_file, token_file, host, port):
     creds = None
     if os.path.exists(token_file):
-        with open(token_file, "rb") as f:
-            creds = pickle.load(f)
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -143,8 +142,8 @@ def get_creds(credentials_file, token_file, host, port):
             flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
             creds = flow.run_local_server(host=host, port=port)
 
-        with open(token_file, "wb") as f:
-            pickle.dump(creds, f)
+        with open(token_file, "w") as f:
+            f.write(creds.to_json())
 
     # Here are all the common attributes between google.oauth2.credentials.Credentials
     # and aiogoogle.auth.creds.UserCreds. UserCreds has more attributes, but

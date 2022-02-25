@@ -1,5 +1,5 @@
 #aiogoogle==1.1.15
 https://github.com/PluieElectrique/aiogoogle/archive/refs/heads/master.zip
-google-auth==1.23.0
-google-auth-oauthlib==0.4.2
-tqdm==4.61.0
+google-auth==2.6.0
+google-auth-oauthlib==0.5.0
+tqdm==4.62.3

@@ -16,7 +16,7 @@ Now, follow [this guide](https://developers.google.com/workspace/guides/create-c
 
 * **Locally**: Follow the steps for a "Desktop application". Download the client secret JSON and save it as `credentials.json` in the same directory as the script (if you save it somewhere else, pass it in as an argument, e.g. `--credentials path/to/creds.json`). The first time you run the script, you will be prompted to go through the [authorization process](#authorization) with your Google Account. After that, you won't need to re-authorize until the token expires.
 * **Remotely**: You have two options:
-    * **Authorize locally**: This is the easy way: authorize locally and copy the credentials/token to your remote server. To do this, follow the above steps. After completing the setup, run the tool on your local machine with an empty file (e.g. `touch empty; python drive_api_tool.py empty unused_ouput`) and complete the [authorization process](#authorization). Then, copy the created `token.pickle` and your `credentials.json` to the server. You can then remotely run the script as normal.
+    * **Authorize locally**: This is the easy way: authorize locally and copy the credentials/token to your remote server. To do this, follow the above steps. After completing the setup, run the tool on your local machine with an empty file (e.g. `touch empty; python drive_api_tool.py empty unused_ouput`) and complete the [authorization process](#authorization). Then, copy the created `token.json` and your `credentials.json` to the server. You can then remotely run the script as normal.
     * **Authorize remotely**: This is more annoying, but still doable. Follow the steps for a "web server app". (For the redirect URL, if you don't have a domain name that points to your server, you might be able to mess with your hosts file or use a localhost tunnel service like [localtunnel](https://localtunnel.me/) or [ngrok](https://ngrok.com/).) Copy the client secret JSON to your server as `credentials.json`. The first time you run the script, you will be prompted with the [authorization process](#authorization) (and will likely need to pass the host and port of your redirect URL, e.g. `--host example.com --port 8080`). After that, you will not need to re-authorize until the token expires (so you can leave off the `--host` and `--port` arguments until then).
 
 After setting up your credentials, you can run the tool with:
@@ -34,7 +34,7 @@ If you need to authorize the app, a link will be printed in the console (and ope
 (If you're concerned about security, this tool only fetches the metadata of the given IDs. It does not read the metadata of your personal files unless you pass those IDs. The only scope requested is `https://www.googleapis.com/auth/drive.readonly` [see [this table](https://developers.google.com/drive/api/v3/about-auth#OAuth2Scope
 )], so this tool cannot create, modify, or delete files.)
 
-Then, click "Allow" to grant the permissions and "Allow" again to confirm. The tool should now begin to run, and you can now close the window. From now on, you should not need to re-authorize unless `token.pickle` is removed.
+Then, click "Allow" to grant the permissions and "Allow" again to confirm. The tool should now begin to run, and you can now close the window. From now on, you should not need to re-authorize unless `token.json` is removed.
 
 (If you picked the "run remotely but authorize locally" option above, remember to copy the credentials and token to your remote server.)
 
@@ -88,7 +88,7 @@ If you still need to go faster, you can apply to increase your quota. I haven't 
 * `--host` (default: `localhost`): Host for the local auth server. You may need to change this if you are performing [authorization on a remote server](#authorize-remotely-on-a-public-server).
 * `--port` (default: `8000`): Port for the local auth server. You may need to change this depending on firewall settings.
 * `--credentials` (default: `credentials.json`): Path to JSON file containing client credentials. Follow the steps in [Setup](#setup) if you don't have this file.
-* `--token` (default: `token.pickle`): File to store the access and refresh tokens. This prevents having to authorize every time you want to run the tool.
+* `--token` (default: `token.json`): File to store the access and refresh tokens. This prevents having to authorize every time you want to run the tool.
 
 ## Legal
 
