@@ -298,6 +298,7 @@ def fix_restore_queues(db_name):
              SELECT id FROM metadata WHERE id = parent_id)"""
     )
     missing_parents = set(e[0] for e in cur.fetchall())
+    print(f"Found {len(missing_parents)} missing parents")
 
     cur.close()
     conn.close()
