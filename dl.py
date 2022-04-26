@@ -9,7 +9,7 @@ import zlib
 
 from tqdm import tqdm
 
-from export_config import WORKSPACE_EXPORT, OWNER_BLACKLIST, TLD_BLACKLIST
+from export_config import WORKSPACE_EXPORT, OWNER_BLACKLIST, REGEX_BLACKLIST
 from rate_limit import rate_limited_as_completed
 from util import ErrorTracker, sanitize_filename
 
@@ -660,8 +660,8 @@ async def download_and_save(
                     owner_email_address = owner["emailAddress"]
                     if owner_email_address in OWNER_BLACKLIST:
                         return
-                    for tld in TLD_BLACKLIST:
-                        if owner_email_address.endswith(tld):
+                    for regex in REGEX_BLACKLIST:
+                        if regex.search(owner_email_address):
                             return
 
             item_path = os.path.join(path, item.filename())

@@ -1,3 +1,5 @@
+import re
+
 WORKSPACE_EXPORT = {
     "application/vnd.google-apps.document": [
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -18,8 +20,8 @@ OWNER_BLACKLIST = set(
     # "example2@example.com",
 )
 
-# Set of top-level domains to ignore
-TLD_BLACKLIST = set(
-    # ".edu",
-    # ".org",
+# Blacklist owner emails using regexes
+REGEX_BLACKLIST = set(
+    # Blacklist all .edu and .edu.* domains, case-insensitively
+    # re.compile(r"\.edu(\.[^.]+)?$", re.I),
 )
