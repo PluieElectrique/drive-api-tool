@@ -9,7 +9,7 @@ import zlib
 
 from tqdm import tqdm
 
-from export_config import WORKSPACE_EXPORT, OWNER_BLACKLIST
+from export_config import WORKSPACE_EXPORT, OWNER_BLACKLIST, TLD_BLACKLIST
 from rate_limit import rate_limited_as_completed
 from util import ErrorTracker, sanitize_filename
 
@@ -388,6 +388,7 @@ async def get_metadata_recursive(
         );
         """
     )
+    # XXX: I typed "NOY NULL" instead of "NOT NULL"
     metadata_c.execute(
         """
         CREATE TABLE IF NOT EXISTS hierarchy(
@@ -655,8 +656,13 @@ async def download_and_save(
         global things_to_download
         try:
             for owner in item["owners"]:
-                if "emailAddress" in owner and owner["emailAddress"] in OWNER_BLACKLIST:
-                    return
+                if "emailAddress" in owner:
+                    owner_email_address = owner["emailAddress"]
+                    if owner_email_address in OWNER_BLACKLIST:
+                        return
+                    for tld in TLD_BLACKLIST:
+                        if owner_email_address.endswith(tld):
+                            return
 
             item_path = os.path.join(path, item.filename())
             item_id = item["id"]

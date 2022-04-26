@@ -17,3 +17,9 @@ OWNER_BLACKLIST = set(
     # "example1@example.com",
     # "example2@example.com",
 )
+
+# Set of top-level domains to ignore
+TLD_BLACKLIST = set(
+    # ".edu",
+    # ".org",
+)
