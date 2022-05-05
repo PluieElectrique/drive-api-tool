@@ -5,7 +5,7 @@ import zlib
 
 from tqdm import tqdm
 
-from export_config import OWNER_BLACKLIST
+from export_config import OWNER_BLACKLIST, REGEX_BLACKLIST
 
 
 class DB:
@@ -106,14 +106,28 @@ class Recurse:
             | self.skipped_id_0B
         )
 
-    def recurse(self, id, metadata, children, blacklist=False):
+    def recurse(self, id, children, blacklist=False):
         self.pbar.update(1)
 
-        if metadata is not None:
+        # Only load metadata if we need to check blacklisting or children
+        if not blacklist or children:
+            metadata = self.db.load_metadata(id)
+        else:
+            metadata = None
+
+        if metadata is not None and not blacklist:
             for owner in metadata["owners"]:
-                if "emailAddress" in owner and owner["emailAddress"] in OWNER_BLACKLIST:
-                    blacklist = True
-                    break
+                if "emailAddress" in owner:
+                    owner_email_address = owner["emailAddress"]
+                    if owner_email_address in OWNER_BLACKLIST:
+                        blacklist = True
+                        break
+                    for regex in REGEX_BLACKLIST:
+                        if regex.search(owner_email_address):
+                            blacklist = True
+                            break
+                    if blacklist:
+                        break
 
         if blacklist:
             if id.startswith("0B"):
@@ -136,7 +150,6 @@ class Recurse:
             for child_id in children:
                 self.recurse(
                     child_id,
-                    self.db.load_metadata(child_id),
                     self.db.load_children(child_id),
                     blacklist,
                 )
@@ -162,7 +175,7 @@ if __name__ == "__main__":
         with Recurse(db, id_total) as r:
             for id in db.get_all_ids():
                 if not db.is_child(id):
-                    r.recurse(id, db.load_metadata(id), db.load_children(id))
+                    r.recurse(id, db.load_children(id))
 
             r.report()
             good_seen = r.seen()
@@ -179,7 +192,7 @@ if __name__ == "__main__":
         print("Recursing through missing parents")
         with Recurse(db, len(missing_parents)) as r:
             for id in missing_parents:
-                r.recurse(id, db.load_metadata(id), db.load_children(id))
+                r.recurse(id, db.load_children(id))
 
             r.report()
             bad_seen = r.seen()
