@@ -85,12 +85,23 @@ class Item:
         """Filename for saving this item to disk."""
         # Folder:              {name}_{id}
         # Exported document:   {name}_{id}_{version}  (no extension but leave space for it)
-        # File with extension: {name w/o extension}_{id}_{version}.{extension}
-        # File w/o extension:  {name}_{id}_{version}
+        # File with extension: {name w/o extension}_{id}.{extension}
+        # File w/o extension:  {name}_{id}
         #
         # If the entire filename is too long, {name} is truncated until it fits.
         # Append ".json" for the metadata filename. (This means that each
         # filename must leave 5 characters for this suffix.)
+        #
+        # The version number is used to track file changes, but it often
+        # changes for no apparent reason. For example, an unmodified raw file
+        # may go through hundreds of version numbers if downloaded over a
+        # period of time. The API docs note that:
+        #   [The version number] reflects every change made to the file on the
+        #   server, even those not visible to the user.
+        #
+        # This isn't too much of a problem for docs, since they're usually
+        # small. But, duplicate raw files are bad when the files are large.
+        # Also, raw files have hashes, which should really be used instead.
 
         name = self["name"]
         id = self["id"]
@@ -110,10 +121,10 @@ class Item:
             # not cleared if the new name does not contain a valid extension."
             # (https://developers.google.com/drive/api/v3/reference/files)
 
-            suffix = f"_{id}_{version}.{extension}"
+            suffix = f"_{id}.{extension}"
             name = name[: -(1 + len(extension))]
         else:
-            suffix = f"_{id}_{version}"
+            suffix = f"_{id}"
 
         reserved_space += len(suffix)
         filename = sanitize_filename(name, reserved_space, forbidden_sub)
