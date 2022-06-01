@@ -14,7 +14,13 @@ if __name__ == "__main__":
         # These are the default fields returned by the API tester.
         default="kind,id,name,mimeType",
         type=str,
-        help=("(default: %(default)s) For performance, only request fields you need."),
+        help="(default: %(default)s) For performance, only request fields you need.",
+    )
+    parser.add_argument(
+        "--pages",
+        default=None,
+        type=int,
+        help="(default: all pages) Number of pages of search results to return.",
     )
     parser.add_argument(
         "--quota",
@@ -73,7 +79,7 @@ logging.basicConfig(filename=logger_filename)
 logger = logging.getLogger(__name__)
 
 
-async def shared_with_me(aiogoogle, drive, fields, quota, indent):
+async def shared_with_me(aiogoogle, drive, fields, pages, quota, indent):
     metadata = []
     err_track = ErrorTracker(logger, indent)
     pbar = tqdm(desc="Fetching 'Shared With Me' files", unit="req")
@@ -88,14 +94,25 @@ async def shared_with_me(aiogoogle, drive, fields, quota, indent):
                 fields=f"nextPageToken,incompleteSearch,files({fields})",
                 pageToken=page_token,
                 pageSize=page_size,
+                includeItemsFromAllDrives=True,
+                orderBy="sharedWithMeTime desc",
+                # Is this necessary? The Google Drive website adds this
+                # (technically it adds "supportsTeamDrives=true", but that's
+                # deprecated).
+                supportsAllDrives=True,
+                # "files created by, opened by, or shared directly with the user"
+                corpora="user",
+                spaces="drive",
             )
         )
 
+    i = 0
     coro = make_coro()
-    while True:
+    while pages is None or i < pages:
         now = time.monotonic()
         res = await err_track(coro)
         pbar.update(1)
+        i += 1
         if not res:
             break
 
@@ -126,7 +143,7 @@ async def main(args):
     async with Aiogoogle(user_creds=user_creds, client_creds=client_creds) as aiogoogle:
         drive = await aiogoogle.discover("drive", "v3")
         metadata, err_track = await shared_with_me(
-            aiogoogle, drive, args.fields, args.quota, args.indent
+            aiogoogle, drive, args.fields, args.pages, args.quota, args.indent
         )
 
         with open(args.output, "w") as f:
