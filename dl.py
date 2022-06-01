@@ -670,9 +670,17 @@ async def download_and_save(
                 if "emailAddress" in owner:
                     owner_email_address = owner["emailAddress"]
                     if owner_email_address in OWNER_BLACKLIST:
+                        # If we're skipping a folder, we should also increment
+                        # the progress bar by the number of children, but that
+                        # would require recursively loading the metadata, which
+                        # is slow. So we only add 1, which is inaccurate, but
+                        # better than nothing.
+                        download_pbar.update(1)
                         return
                     for regex in REGEX_BLACKLIST:
                         if regex.search(owner_email_address):
+                            # Same as above.
+                            download_pbar.update(1)
                             return
 
             item_path = os.path.join(path, item.filename())
