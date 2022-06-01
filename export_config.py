@@ -15,13 +15,13 @@ WORKSPACE_EXPORT = {
 }
 
 # Set of owner emails to ignore
-OWNER_BLACKLIST = set(
+OWNER_BLACKLIST = set([
     # "example1@example.com",
     # "example2@example.com",
-)
+])
 
 # Blacklist owner emails using regexes
-REGEX_BLACKLIST = set(
+REGEX_BLACKLIST = [
     # Blacklist all .edu and .edu.* domains, case-insensitively
     # re.compile(r"\.edu(\.[^.]+)?$", re.I),
-)
+]
