@@ -747,7 +747,7 @@ async def download_and_save(
                                             fileId=item_id,
                                             mimeType=mime,
                                             download_file=item_path + ext,
-                                            download_file_id_resource_key=id_resource_key,
+                                            id_resource_key=id_resource_key,
                                             alt="media",
                                             validate=False,
                                         )
@@ -772,7 +772,7 @@ async def download_and_save(
                                         download_file_size=int(item["size"])
                                         if "size" in item
                                         else None,
-                                        download_file_id_resource_key=id_resource_key,
+                                        id_resource_key=id_resource_key,
                                         alt="media",
                                         validate=False,
                                     )
