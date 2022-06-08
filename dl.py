@@ -2,6 +2,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import logging
+# Reading millions of JSON objects is slow, so we use orjson. But for maximum
+# backwards compatibility, we only use it for deserializing. There's probably
+# no harm to using it for serializing, but just in case.
+import orjson
 import os
 import sqlite3
 import traceback
@@ -199,7 +203,7 @@ def restore_queues(original_ids, db_name):
             f"SELECT id, metadata FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
         )
         for id, metadata in cur.fetchall():
-            metadata = json.loads(zlib.decompress(metadata))
+            metadata = orjson.loads(zlib.decompress(metadata))
             if metadata["mimeType"] == "application/vnd.google-apps.folder":
                 folder_ids.add(id)
             else:
@@ -295,7 +299,7 @@ def fix_restore_queues(db_name):
             f"SELECT id, metadata FROM metadata LIMIT {BATCH_SIZE} OFFSET {offset}"
         )
         for id, metadata in cur.fetchall():
-            metadata = json.loads(zlib.decompress(metadata))
+            metadata = orjson.loads(zlib.decompress(metadata))
             if metadata["mimeType"] == "application/vnd.google-apps.folder":
                 folder_ids.add(id)
             else:
@@ -646,7 +650,7 @@ async def download_and_save(
         m = metadata_c.execute(
             f"SELECT metadata FROM metadata WHERE id = '{id}' LIMIT 1"
         )
-        return json.loads(zlib.decompress(m.fetchone()[0]))
+        return orjson.loads(zlib.decompress(m.fetchone()[0]))
 
     def load_children(id):
         c = metadata_c.execute(
