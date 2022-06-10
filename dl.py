@@ -6,11 +6,11 @@ import os
 import sqlite3
 import traceback
 
-from isal import isal_zlib
 # Reading millions of JSON objects is slow, so we use orjson. But for maximum
 # backwards compatibility, we only use it for deserializing. There's probably
 # no harm to using it for serializing, but just in case.
 import orjson
+from isal import isal_zlib
 from tqdm import tqdm
 
 from export_config import WORKSPACE_EXPORT, OWNER_BLACKLIST, REGEX_BLACKLIST
@@ -197,6 +197,7 @@ def restore_queues(original_ids, db_name):
     # READ ENTIRE DB TO GET IDS AND FOLDER IDS
     folder_ids = set()
     non_folder_ids = set()
+    folder_resource_keys = {}
     pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
     for offset in range(0, id_total, BATCH_SIZE):
         cur.execute(
@@ -206,6 +207,8 @@ def restore_queues(original_ids, db_name):
             metadata = orjson.loads(isal_zlib.decompress(metadata))
             if metadata["mimeType"] == "application/vnd.google-apps.folder":
                 folder_ids.add(id)
+                if "resourceKey" in metadata:
+                    folder_resource_keys[id] = metadata["resourceKey"]
             else:
                 non_folder_ids.add(id)
             pbar.update(1)
@@ -276,7 +279,13 @@ def restore_queues(original_ids, db_name):
     print("  ids_seen     :", len(export_ids_seen))
     print("  ids_queue    :", len(export_ids_queue))
 
-    return export_folders_queue, export_folders_seen, export_ids_queue, export_ids_seen
+    return (
+        export_folders_queue,
+        export_folders_seen,
+        export_ids_queue,
+        export_ids_seen,
+        folder_resource_keys,
+    )
 
 
 # For some reason, we missed a bunch of IDs--they're in hierarchy but have no metadata.
@@ -293,6 +302,7 @@ def fix_restore_queues(db_name):
     # READ ENTIRE DB TO GET IDS AND FOLDER IDS
     folder_ids = set()
     non_folder_ids = set()
+    folder_resource_keys = {}
     pbar = tqdm(total=id_total, desc="Load all IDs from DB", unit="id")
     for offset in range(0, id_total, BATCH_SIZE):
         cur.execute(
@@ -302,6 +312,8 @@ def fix_restore_queues(db_name):
             metadata = orjson.loads(isal_zlib.decompress(metadata))
             if metadata["mimeType"] == "application/vnd.google-apps.folder":
                 folder_ids.add(id)
+                if "resourceKey" in metadata:
+                    folder_resource_keys[id] = metadata["resourceKey"]
             else:
                 non_folder_ids.add(id)
             pbar.update(1)
@@ -324,7 +336,7 @@ def fix_restore_queues(db_name):
     folders_seen = folder_ids | missing_parents
     ids_queue = missing_parents
     ids_seen = non_folder_ids | folder_ids
-    return folders_queue, folders_seen, ids_queue, ids_seen
+    return folders_queue, folders_seen, ids_queue, ids_seen, folder_resource_keys
 
 
 async def get_metadata_recursive(
@@ -371,19 +383,28 @@ async def get_metadata_recursive(
 
     if restore is not None:
         metadata_db = restore
-        folders_queue, folders_seen, ids_queue, ids_seen = restore_queues(
-            initial_ids, metadata_db
-        )
+        (
+            folders_queue,
+            folders_seen,
+            ids_queue,
+            ids_seen,
+            folder_resource_keys,
+        ) = restore_queues(initial_ids, metadata_db)
     elif fix_missing_parents is not None:
         metadata_db = fix_missing_parents
-        folders_queue, folders_seen, ids_queue, ids_seen = fix_restore_queues(
-            metadata_db
-        )
+        (
+            folders_queue,
+            folders_seen,
+            ids_queue,
+            ids_seen,
+            folder_resource_keys,
+        ) = fix_restore_queues(metadata_db)
     else:
         ids_queue = set(initial_ids)
         ids_seen = set()
         folders_queue = set()
         folders_seen = set()
+        folder_resource_keys = {}
 
         # Not UTC or ISO 8601, but it's readable and filename-safe
         metadata_db = (
@@ -392,6 +413,14 @@ async def get_metadata_recursive(
             )
             + ".db"
         )
+
+    # Prune folder_resource_keys (might save a bit of memory)
+    for id in folders_seen & folder_resource_keys.keys():
+        del folder_resource_keys[id]
+
+    def get_folder_resource_key(id):
+        if id in folder_resource_keys:
+            return id + "/" + folder_resource_keys[id]
 
     metadata_conn = sqlite3.connect(metadata_db)
     metadata_c = metadata_conn.cursor()
@@ -431,12 +460,16 @@ async def get_metadata_recursive(
                 if parent not in folders_seen and parent not in folders_queue:
                     folders_queue.add(parent)
                     queued += 1
+                    # Hope that we already have the resource key for this
+                    # folder, if one is required.
         if (
             mime_type == "application/vnd.google-apps.folder"
             and id not in folders_seen
             and id not in folders_queue
         ):
             folders_queue.add(id)
+            if "resourceKey" in res:
+                folder_resource_keys[id] = res["resourceKey"]
             queued += 1
         elif follow_shortcuts and mime_type == "application/vnd.google-apps.shortcut":
             target_id = res["shortcutDetails"]["targetId"]
@@ -495,6 +528,7 @@ async def get_metadata_recursive(
                             fields=f"nextPageToken,incompleteSearch,files({fields})",
                             pageToken=token,
                             pageSize=PAGE_SIZE,
+                            id_resource_key=get_folder_resource_key(id),
                         )
                     ),
                 )
@@ -514,6 +548,9 @@ async def get_metadata_recursive(
                 if next_page_token:
                     folders_continue.append((id, next_page_token))
                     pbar_total += 1
+                elif id in folder_resource_keys:
+                    # Save some memory?
+                    del folder_resource_keys[id]
 
                 for child in res["files"]:
                     child_id = child["id"]
