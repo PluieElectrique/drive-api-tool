@@ -670,6 +670,8 @@ async def download_and_save(
     """
     )
 
+    downloaded_count_not_docs = 0
+
     def add_suceeded(ids):
         ids = [(i,) for i in ids]
         metadata_c.executemany("INSERT OR IGNORE INTO downloaded VALUES (?)", ids)
@@ -701,11 +703,11 @@ async def download_and_save(
         )
         return c.fetchone() is not None
 
-    async def wrap_coro(id, coro):
-        return id, await coro
+    async def wrap_coro_with_type(id, is_doc, coro):
+        return id, is_doc, await coro
 
     async def create_folders_dump_metadata(path, item, id_set):
-        global things_to_download
+        global things_to_download, downloaded_count_not_docs
         try:
             for owner in item["owners"]:
                 if "emailAddress" in owner:
@@ -781,8 +783,9 @@ async def download_and_save(
                                 clear_suceeded(item_id)
                                 did_succeed = False
                             things_to_download.append(
-                                wrap_coro(
+                                wrap_coro_with_type(
                                     item_id,
+                                    True,
                                     aiogoogle.as_user(
                                         drive.files.export(
                                             fileId=item_id,
@@ -804,8 +807,9 @@ async def download_and_save(
                         if did_succeed:
                             clear_suceeded(item_id)
                         things_to_download.append(
-                            wrap_coro(
+                            wrap_coro_with_type(
                                 item_id,
+                                False,
                                 aiogoogle.as_user(
                                     drive.files.get(
                                         fileId=item_id,
@@ -837,6 +841,8 @@ async def download_and_save(
                     res = await err_track(coro)
                     if isinstance(res, tuple):
                         suceeeded.append(res[0])
+                        if not res[1]:
+                            downloaded_count_not_docs += 1
                     download_pbar.update(1)
                 things_to_download = []
                 if suceeeded:
@@ -891,12 +897,17 @@ async def download_and_save(
             res = await err_track(coro)
             if isinstance(res, tuple):
                 suceeeded.append(res[0])
+                if not res[1]:
+                    downloaded_count_not_docs += 1
             download_pbar.update(1)
         if suceeeded:
             add_suceeded(suceeeded)
         things_to_download = []
     metadata_conn.close()
     download_pbar.close()
+
+    print()
+    print("Total successful downloads (excluding docs):", downloaded_count_not_docs)
 
 
 async def main(ids, aiogoogle, drive, args):
