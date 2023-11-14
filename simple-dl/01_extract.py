@@ -153,6 +153,7 @@ if __name__ == "__main__":
     while true_parent_folders:
         with tqdm(total=len(true_parent_folders), unit="id") as pbar:
             for id in true_parent_folders:
+                item = None
                 try:
                     item = in_db.load_metadata(id)
                 except:
