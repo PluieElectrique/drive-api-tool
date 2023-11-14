@@ -160,7 +160,7 @@ if __name__ == "__main__":
                     children = in_db.load_children(id)
                     orphans.extend(children)
                     logger.error(f"Failed to load metadata for parent folder: {id}, orphans: {len(children)}")
-                    pbar.set_description_str(f"Failed: {item['name']} ({item['id']})", refresh=False)
+                    pbar.set_description_str(f"Failed: {id}", refresh=False)
                     pbar.update(1)
                     continue
 
