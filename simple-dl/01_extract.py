@@ -143,18 +143,34 @@ if __name__ == "__main__":
     out_db = OutputDb(args.output_db)
     visitor = Visitor(in_db, out_db)
     true_parent_folders = in_db.get_true_parent_folders()
+    orphans = []
 
     print("Processing DB")
     print("  Progress bar counts the number of top-level folders, so each item may take a long time")
     print("  Detailed progress can be tracked by `SELECT COUNT(*)`ing the number of rows in the `data` table of the output DB")
     print("  Progress bar description shows current folder/ID being processed\n")
-    with tqdm(total=len(true_parent_folders), unit="id") as pbar:
-        for id in true_parent_folders:
-            item = in_db.load_metadata(id)
-            pbar.set_description_str(f"{item['name']} ({item['id']})")      # Hopefully doesn't cause too much refreshing
 
-            visitor.visit(item)
-            pbar.update(1)
+    while true_parent_folders:
+        with tqdm(total=len(true_parent_folders), unit="id") as pbar:
+            for id in true_parent_folders:
+                try:
+                    item = in_db.load_metadata(id)
+                except:
+                    children = in_db.load_children(id)
+                    orphans.extend(children)
+                    logger.error(f"Failed to load metadata for parent folder: {id}, orphans: {len(children)}")
+                    pbar.set_description_str(f"Failed: {item['name']} ({item['id']})", refresh=False)
+                    pbar.update(1)
+                    continue
+
+                pbar.set_description_str(f"{item['name']} ({item['id']})")      # Hopefully doesn't cause too much refreshing
+                visitor.visit(item)
+                pbar.update(1)
+
+        print("Done, orphans to process: ", len(orphans))
+
+        true_parent_folders = orphans
+        orphans = []
 
     print("\nDone, closing DBs")
     in_db.close()
