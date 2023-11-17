@@ -18,7 +18,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    logger_filename = f"simple_dl_errors_{now}.log"
+    logger_filename = f"simple_dl_01_extract_errors_{now}.log"
     print(f"Logging to {logger_filename}\n")
     logging.basicConfig(filename=logger_filename)
     logger = logging.getLogger(__name__)
